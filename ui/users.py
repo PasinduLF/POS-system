@@ -79,3 +79,5 @@ class UsersDialog(QtWidgets.QDialog):
 			self.db.delete_user(uid)
 			self.refresh()
 
+
+

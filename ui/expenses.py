@@ -61,3 +61,5 @@ class ExpensesDialog(QtWidgets.QDialog):
 		self.desc.clear(); self.cat.clear(); self.amount.setValue(0)
 		self.refresh()
 
+
+
