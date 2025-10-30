@@ -59,9 +59,12 @@ class DashboardWindow(QtWidgets.QMainWindow):
 	def _build_menu(self):
 		menubar = self.menuBar()
 		file_menu = menubar.addMenu('File')
+		logout_action = file_menu.addAction('Logout')
+		logout_action.setShortcut('Ctrl+L')
 		backup_action = file_menu.addAction('Backup Database...')
 		restore_action = file_menu.addAction('Restore Database...')
 		exit_action = file_menu.addAction('Exit')
+		logout_action.triggered.connect(self._logout)
 		backup_action.triggered.connect(self._do_backup)
 		restore_action.triggered.connect(self._do_restore)
 		exit_action.triggered.connect(self.close)
@@ -183,4 +186,36 @@ class DashboardWindow(QtWidgets.QMainWindow):
 			dlg.exec_()
 		except Exception as e:
 			QtWidgets.QMessageBox.critical(self, 'Sales', str(e))
+
+	def _logout(self):
+		from ui.login import LoginDialog
+		app = QtWidgets.QApplication.instance()
+		# Close current main window
+		self.close()
+		# Show login dialog
+		login = LoginDialog(self.db)
+		if login.exec_() == QtWidgets.QDialog.Accepted:
+			new_user = login.get_authenticated_user()
+			if not new_user:
+				app.quit()
+				return
+			# Open a fresh dashboard window
+			new_window = DashboardWindow(self.db, new_user)
+			# Keep a reference on the app to avoid GC
+			setattr(app, '_main_window', new_window)
+			new_window.show()
+		else:
+			app.quit()
+
+	def _rebuild_tabs(self):
+		# Clear and recreate main tabs according to role
+		while self.tabs.count() > 0:
+			self.tabs.removeTab(0)
+		self.pos_tab = POSWidget(self.db, self.user)
+		self.tabs.addTab(self.pos_tab, 'POS')
+		if self.user['role'] == 'admin':
+			self.products_tab = ProductsWidget(self.db)
+			self.reports_tab = ReportsWidget(self.db)
+			self.tabs.addTab(self.products_tab, 'Products')
+			self.tabs.addTab(self.reports_tab, 'Reports')
 

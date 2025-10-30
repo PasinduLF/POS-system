@@ -63,3 +63,4 @@ class ExpensesDialog(QtWidgets.QDialog):
 
 
 
+
