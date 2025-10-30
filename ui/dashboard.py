@@ -1,0 +1,186 @@
+from PyQt5 import QtWidgets
+from .pos_screen import POSWidget
+from .products import ProductsWidget
+from .reports import ReportsWidget
+from utils.backup import backup_database, export_table_to_csv, export_table_to_excel
+import os
+import zipfile
+
+
+class DashboardWindow(QtWidgets.QMainWindow):
+	def __init__(self, db, user, parent=None):
+		super().__init__(parent)
+		self.db = db
+		self.user = user
+		self.setWindowTitle('Beauty P&C POS - Dashboard')
+
+		self.tabs = QtWidgets.QTabWidget()
+		self.pos_tab = POSWidget(db, self.user)
+		self.products_tab = ProductsWidget(db)
+		self.reports_tab = ReportsWidget(db)
+
+		self.tabs.addTab(self.pos_tab, 'POS')
+		self.tabs.addTab(self.products_tab, 'Products')
+		self.tabs.addTab(self.reports_tab, 'Reports')
+
+		central = QtWidgets.QWidget()
+		v = QtWidgets.QVBoxLayout(central)
+
+		# Header: role and low stock
+		header = QtWidgets.QHBoxLayout()
+		self.info_label = QtWidgets.QLabel(f"Logged in: {self.user['username']} ({self.user['role']})")
+		self.totals_label = QtWidgets.QLabel('')
+		header.addWidget(self.info_label)
+		header.addStretch()
+		header.addWidget(self.totals_label)
+
+		v.addLayout(header)
+		v.addWidget(self.tabs)
+
+		self.setCentralWidget(central)
+		self.refresh_header()
+		self._build_menu()
+
+		# Start maximized for full-screen responsive layout
+		self.showMaximized()
+
+		if self.user['role'] == 'cashier':
+			idx = self.tabs.indexOf(self.products_tab)
+			self.tabs.removeTab(idx)
+			idx = self.tabs.indexOf(self.reports_tab)
+			self.tabs.removeTab(idx)
+
+	def refresh_header(self):
+		low = self.db.low_stock_products()
+		low_count = len(low)
+		daily = self.db.daily_totals()
+		self.totals_label.setText(f"Low stock: {low_count} | Today: {daily['total']:.2f}")
+
+	def _build_menu(self):
+		menubar = self.menuBar()
+		file_menu = menubar.addMenu('File')
+		backup_action = file_menu.addAction('Backup Database...')
+		restore_action = file_menu.addAction('Restore Database...')
+		exit_action = file_menu.addAction('Exit')
+		backup_action.triggered.connect(self._do_backup)
+		restore_action.triggered.connect(self._do_restore)
+		exit_action.triggered.connect(self.close)
+
+		# View menu for fullscreen toggle
+		view_menu = menubar.addMenu('View')
+		self.fullscreen_action = view_menu.addAction('Toggle Full Screen')
+		self.fullscreen_action.setShortcut('F11')
+		self.fullscreen_action.triggered.connect(self._toggle_fullscreen)
+
+		export_menu = menubar.addMenu('Export')
+		self.export_actions = {
+			'products': export_menu.addAction('Products (CSV)'),
+			'sales': export_menu.addAction('Sales (CSV)'),
+			'sale_items': export_menu.addAction('Sale Items (CSV)'),
+			'categories': export_menu.addAction('Categories (CSV)'),
+			'brands': export_menu.addAction('Brands (CSV)'),
+			'expenses': export_menu.addAction('Expenses (CSV)'),
+			'inventory_xlsx': export_menu.addAction('Inventory (Excel)'),
+		}
+		self.export_actions['products'].triggered.connect(lambda: self._export_table('products', 'csv'))
+		self.export_actions['sales'].triggered.connect(lambda: self._export_table('sales', 'csv'))
+		self.export_actions['sale_items'].triggered.connect(lambda: self._export_table('sale_items', 'csv'))
+		self.export_actions['categories'].triggered.connect(lambda: self._export_table('categories', 'csv'))
+		self.export_actions['brands'].triggered.connect(lambda: self._export_table('brands', 'csv'))
+		self.export_actions['expenses'].triggered.connect(lambda: self._export_table('expenses', 'csv'))
+		self.export_actions['inventory_xlsx'].triggered.connect(lambda: self._export_table('products', 'xlsx'))
+
+		manage_menu = menubar.addMenu('Manage')
+		users_action = manage_menu.addAction('Users...')
+		expenses_action = manage_menu.addAction('Expenses...')
+		sales_action = manage_menu.addAction('Sales...')
+		users_action.triggered.connect(self._open_users)
+		expenses_action.triggered.connect(self._open_expenses)
+		sales_action.triggered.connect(self._open_sales)
+
+		# Role restrictions
+		is_admin = self.user['role'] == 'admin'
+		manage_menu.menuAction().setVisible(is_admin)
+		export_menu.menuAction().setVisible(is_admin)
+		backup_action.setVisible(is_admin)
+		restore_action.setVisible(is_admin)
+
+	def _toggle_fullscreen(self):
+		if self.isFullScreen():
+			self.showMaximized()
+		else:
+			self.showFullScreen()
+
+	def _do_backup(self):
+		path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Backup', 'beauty_pc_backup.zip', 'Zip Files (*.zip)')
+		if not path:
+			return
+		try:
+			backup_database(self.db._db_path, path)
+			QtWidgets.QMessageBox.information(self, 'Backup', 'Backup completed')
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Backup Failed', str(e))
+
+	def _do_restore(self):
+		path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Restore Database', '', 'Zip (*.zip);;SQLite DB (*.db)')
+		if not path:
+			return
+		try:
+			if path.lower().endswith('.zip'):
+				with zipfile.ZipFile(path, 'r') as zf:
+					dbnames = [n for n in zf.namelist() if n.lower().endswith('.db')]
+					if not dbnames:
+						raise RuntimeError('No .db file in backup zip')
+					zf.extract(dbnames[0], os.path.dirname(self.db._db_path))
+					extracted = os.path.join(os.path.dirname(self.db._db_path), dbnames[0])
+					os.replace(extracted, self.db._db_path)
+			else:
+				os.replace(path, self.db._db_path)
+			QtWidgets.QMessageBox.information(self, 'Restore', 'Database restored. Please restart the app.')
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Restore Failed', str(e))
+
+	def _export_table(self, table: str, fmt: str):
+		if fmt == 'csv':
+			path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Export to CSV', f'{table}.csv', 'CSV (*.csv)')
+			if not path:
+				return
+			try:
+				export_table_to_csv(self.db.connection(), table, path)
+				QtWidgets.QMessageBox.information(self, 'Export', 'Exported to CSV')
+			except Exception as e:
+				QtWidgets.QMessageBox.critical(self, 'Export Failed', str(e))
+		else:
+			path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Export to Excel', f'{table}.xlsx', 'Excel (*.xlsx)')
+			if not path:
+				return
+			try:
+				export_table_to_excel(self.db.connection(), table, path)
+				QtWidgets.QMessageBox.information(self, 'Export', 'Exported to Excel')
+			except Exception as e:
+				QtWidgets.QMessageBox.critical(self, 'Export Failed', str(e))
+
+	def _open_users(self):
+		try:
+			from .users import UsersDialog
+			dlg = UsersDialog(self.db, parent=self)
+			dlg.exec_()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Users', str(e))
+
+	def _open_expenses(self):
+		try:
+			from .expenses import ExpensesDialog
+			dlg = ExpensesDialog(self.db, parent=self)
+			dlg.exec_()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Expenses', str(e))
+
+	def _open_sales(self):
+		try:
+			from .sales import SalesDialog
+			dlg = SalesDialog(self.db, parent=self)
+			dlg.exec_()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Sales', str(e))
+
