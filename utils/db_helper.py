@@ -431,3 +431,35 @@ class Database:
 			result.append({'period': key, 'revenue': rev, 'cogs': cogs, 'expenses': exp, 'other_income': inc, 'profit': profit})
 		return result
 
+	# Cashbook
+	@classmethod
+	def cashbook_report(cls) -> Dict[str, Any]:
+		conn = cls.connection()
+		# Cash sales (where payment_type = 'Cash')
+		cash_sales_row = conn.execute(
+			"SELECT IFNULL(SUM(paid_amount), 0) AS total FROM sales WHERE payment_type = 'Cash'"
+		).fetchone()
+		cash_sales = float(cash_sales_row['total'] if cash_sales_row else 0.0)
+		
+		# Other income (assuming all is cash)
+		income_row = conn.execute("SELECT IFNULL(SUM(amount), 0) AS total FROM other_income").fetchone()
+		other_income = float(income_row['total'] if income_row else 0.0)
+		
+		# Expenses (assuming all are cash)
+		expenses_row = conn.execute("SELECT IFNULL(SUM(amount), 0) AS total FROM expenses").fetchone()
+		total_expenses = float(expenses_row['total'] if expenses_row else 0.0)
+		
+		# Total cash received
+		total_received = cash_sales + other_income
+		
+		# Net cash balance
+		net_cash = total_received - total_expenses
+		
+		return {
+			'cash_sales': cash_sales,
+			'other_income': other_income,
+			'total_received': total_received,
+			'expenses': total_expenses,
+			'net_cash': net_cash
+		}
+

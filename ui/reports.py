@@ -34,11 +34,14 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_profit_y = QtWidgets.QPushButton('Profit (Yearly)')
 		self.btn_expenses = QtWidgets.QPushButton('Expenses Summary')
 		self.btn_income = QtWidgets.QPushButton('Income Summary')
+		self.btn_cashbook = QtWidgets.QPushButton('📗 Cashbook')
+		self.btn_cashbook.setStyleSheet('font-weight: bold;')
 		financial_layout.addWidget(self.btn_profit_d, 0, 0)
 		financial_layout.addWidget(self.btn_profit_m, 0, 1)
 		financial_layout.addWidget(self.btn_profit_y, 0, 2)
 		financial_layout.addWidget(self.btn_expenses, 1, 0)
 		financial_layout.addWidget(self.btn_income, 1, 1)
+		financial_layout.addWidget(self.btn_cashbook, 1, 2)
 		financial_group.setLayout(financial_layout)
 		left_panel.addWidget(financial_group)
 
@@ -76,6 +79,7 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_profit_d.clicked.connect(lambda: self.show_profit('daily'))
 		self.btn_profit_m.clicked.connect(lambda: self.show_profit('monthly'))
 		self.btn_profit_y.clicked.connect(lambda: self.show_profit('yearly'))
+		self.btn_cashbook.clicked.connect(self.show_cashbook)
 
 	def show_sales(self, period: str):
 		rows = self.db.sales_summary(period)
@@ -111,4 +115,23 @@ class ReportsWidget(QtWidgets.QWidget):
 		rows = self.db.profit_report(period)
 		lines = [f"{r['period']}: Revenue {r['revenue']:.2f} - COGS {r['cogs']:.2f} - Expenses {r['expenses']:.2f} + Other Income {r.get('other_income', 0):.2f} = Profit {r['profit']:.2f}" for r in rows]
 		self.text.setPlainText('\n'.join(lines) or 'No data')
+
+	def show_cashbook(self):
+		data = self.db.cashbook_report()
+		lines = [
+			'=== CASHBOOK ===',
+			'',
+			f"Cash Sales:        Rs. {data['cash_sales']:.2f}",
+			f"Other Income:      Rs. {data['other_income']:.2f}",
+			f"─────────────────────────────",
+			f"Total Received:    Rs. {data['total_received']:.2f}",
+			'',
+			f"Expenses:          Rs. {data['expenses']:.2f}",
+			'',
+			f"─────────────────────────────",
+			f"NET CASH BALANCE:  Rs. {data['net_cash']:.2f}",
+			'',
+			f"Current Cash Available: Rs. {data['net_cash']:.2f}"
+		]
+		self.text.setPlainText('\n'.join(lines))
 
