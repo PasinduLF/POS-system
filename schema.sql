@@ -69,6 +69,15 @@ CREATE TABLE IF NOT EXISTS expenses (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS other_income (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	description TEXT NOT NULL,
+	category TEXT,
+	amount REAL NOT NULL,
+	received_on DATE NOT NULL,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 CREATE INDEX IF NOT EXISTS idx_products_brand_id ON products(brand_id);
@@ -76,4 +85,5 @@ CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_incurred_on ON expenses(incurred_on);
+CREATE INDEX IF NOT EXISTS idx_other_income_received_on ON other_income(received_on);
 

@@ -13,12 +13,13 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_top = QtWidgets.QPushButton('Top Products')
 		self.btn_inventory = QtWidgets.QPushButton('Inventory Report')
 		self.btn_expenses = QtWidgets.QPushButton('Monthly Expense Summary')
+		self.btn_income = QtWidgets.QPushButton('Monthly Income Summary')
 		self.btn_category = QtWidgets.QPushButton('Category-wise Sales Summary')
 		self.btn_profit_d = QtWidgets.QPushButton('Profit Report (Daily)')
 		self.btn_profit_m = QtWidgets.QPushButton('Profit Report (Monthly)')
 		self.btn_profit_y = QtWidgets.QPushButton('Profit Report (Yearly)')
 
-		for b in [self.btn_daily, self.btn_monthly, self.btn_yearly, self.btn_top, self.btn_inventory, self.btn_expenses, self.btn_category, self.btn_profit_d, self.btn_profit_m, self.btn_profit_y]:
+		for b in [self.btn_daily, self.btn_monthly, self.btn_yearly, self.btn_top, self.btn_inventory, self.btn_expenses, self.btn_income, self.btn_category, self.btn_profit_d, self.btn_profit_m, self.btn_profit_y]:
 			self.layout().addWidget(b)
 
 		self.text = QtWidgets.QPlainTextEdit(); self.text.setReadOnly(True)
@@ -30,6 +31,7 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_top.clicked.connect(self.show_top)
 		self.btn_inventory.clicked.connect(self.show_inventory)
 		self.btn_expenses.clicked.connect(self.show_expenses)
+		self.btn_income.clicked.connect(self.show_income)
 		self.btn_category.clicked.connect(self.show_category)
 		self.btn_profit_d.clicked.connect(lambda: self.show_profit('daily'))
 		self.btn_profit_m.clicked.connect(lambda: self.show_profit('monthly'))
@@ -55,6 +57,11 @@ class ReportsWidget(QtWidgets.QWidget):
 		lines = [f"{r['month']}: Rs. {r['total']:.2f}" for r in rows]
 		self.text.setPlainText('\n'.join(lines) or 'No data')
 
+	def show_income(self):
+		rows = self.db.monthly_income_summary()
+		lines = [f"{r['month']}: Rs. {r['total']:.2f}" for r in rows]
+		self.text.setPlainText('\n'.join(lines) or 'No data')
+
 	def show_category(self):
 		rows = self.db.category_sales_summary()
 		lines = [f"{r['category']}: Revenue {r['revenue']:.2f}, COGS {r['cogs']:.2f}, Invoices {r['invoices']}" for r in rows]
@@ -62,6 +69,6 @@ class ReportsWidget(QtWidgets.QWidget):
 
 	def show_profit(self, period: str):
 		rows = self.db.profit_report(period)
-		lines = [f"{r['period']}: Revenue {r['revenue']:.2f} - COGS {r['cogs']:.2f} - Expenses {r['expenses']:.2f} = Profit {r['profit']:.2f}" for r in rows]
+		lines = [f"{r['period']}: Revenue {r['revenue']:.2f} - COGS {r['cogs']:.2f} - Expenses {r['expenses']:.2f} + Other Income {r.get('other_income', 0):.2f} = Profit {r['profit']:.2f}" for r in rows]
 		self.text.setPlainText('\n'.join(lines) or 'No data')
 

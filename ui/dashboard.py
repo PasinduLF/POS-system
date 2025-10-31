@@ -91,14 +91,18 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		self.export_actions['categories'].triggered.connect(lambda: self._export_table('categories', 'csv'))
 		self.export_actions['brands'].triggered.connect(lambda: self._export_table('brands', 'csv'))
 		self.export_actions['expenses'].triggered.connect(lambda: self._export_table('expenses', 'csv'))
+		self.export_actions['other_income'] = export_menu.addAction('Other Income (CSV)')
+		self.export_actions['other_income'].triggered.connect(lambda: self._export_table('other_income', 'csv'))
 		self.export_actions['inventory_xlsx'].triggered.connect(lambda: self._export_table('products', 'xlsx'))
 
 		manage_menu = menubar.addMenu('Manage')
 		users_action = manage_menu.addAction('Users...')
 		expenses_action = manage_menu.addAction('Expenses...')
+		income_action = manage_menu.addAction('Other Income...')
 		sales_action = manage_menu.addAction('Sales...')
 		users_action.triggered.connect(self._open_users)
 		expenses_action.triggered.connect(self._open_expenses)
+		income_action.triggered.connect(self._open_other_income)
 		sales_action.triggered.connect(self._open_sales)
 
 		# Role restrictions
@@ -178,6 +182,14 @@ class DashboardWindow(QtWidgets.QMainWindow):
 			dlg.exec_()
 		except Exception as e:
 			QtWidgets.QMessageBox.critical(self, 'Expenses', str(e))
+
+	def _open_other_income(self):
+		try:
+			from .other_income import OtherIncomeDialog
+			dlg = OtherIncomeDialog(self.db, parent=self)
+			dlg.exec_()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Other Income', str(e))
 
 	def _open_sales(self):
 		try:

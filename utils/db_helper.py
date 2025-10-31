@@ -46,6 +46,23 @@ class Database:
 			);
 			"""
 		)
+		# ensure other_income table exists
+		conn.execute(
+			"""
+			CREATE TABLE IF NOT EXISTS other_income (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				description TEXT NOT NULL,
+				category TEXT,
+				amount REAL NOT NULL,
+				received_on DATE NOT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			);
+			"""
+		)
+		try:
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_other_income_received_on ON other_income(received_on)')
+		except Exception:
+			pass
 		# ensure products optional columns exist
 		pcols = {row['name'] for row in conn.execute("PRAGMA table_info(products)").fetchall()} if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").fetchone() else set()
 		if 'products' not in {r['name'] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
@@ -343,6 +360,18 @@ class Database:
 		cur = cls.connection().execute("SELECT STRFTIME('%Y-%m', incurred_on) m, SUM(amount) total FROM expenses GROUP BY m ORDER BY m DESC LIMIT 24")
 		return [{'month': r['m'], 'total': r['total']} for r in cur.fetchall()]
 
+	# Other Income
+	@classmethod
+	def add_other_income(cls, description: str, category: str, amount: float, received_on: str) -> int:
+		with cls.connection() as conn:
+			cur = conn.execute('INSERT INTO other_income (description, category, amount, received_on) VALUES (?, ?, ?, ?)', (description, category, amount, received_on))
+			return cur.lastrowid
+
+	@classmethod
+	def monthly_income_summary(cls) -> List[Dict[str, Any]]:
+		cur = cls.connection().execute("SELECT STRFTIME('%Y-%m', received_on) m, SUM(amount) total FROM other_income GROUP BY m ORDER BY m DESC LIMIT 24")
+		return [{'month': r['m'], 'total': r['total']} for r in cur.fetchall()]
+
 	@classmethod
 	def category_sales_summary(cls) -> List[Dict[str, Any]]:
 		q = """
@@ -366,12 +395,15 @@ class Database:
 		if period == 'daily':
 			date_expr = "DATE(s.created_at)"
 			exp_expr = "STRFTIME('%Y-%m-%d', incurred_on)"
+			inc_expr = "STRFTIME('%Y-%m-%d', received_on)"
 		elif period == 'yearly':
 			date_expr = "STRFTIME('%Y', s.created_at)"
 			exp_expr = "STRFTIME('%Y', incurred_on)"
+			inc_expr = "STRFTIME('%Y', received_on)"
 		else:
 			date_expr = "STRFTIME('%Y-%m', s.created_at)"
 			exp_expr = "STRFTIME('%Y-%m', incurred_on)"
+			inc_expr = "STRFTIME('%Y-%m', received_on)"
 		rev_q = f"""
 		SELECT {date_expr} AS p, 
 		       SUM(si.quantity * si.unit_price - si.discount) AS revenue,
@@ -383,15 +415,19 @@ class Database:
 		ORDER BY p DESC
 		"""
 		exp_q = f"SELECT {exp_expr} AS p, SUM(amount) AS expenses FROM expenses GROUP BY p"
+		inc_q = f"SELECT {inc_expr} AS p, SUM(amount) AS income FROM other_income GROUP BY p"
 		conn = cls.connection()
 		rev_rows = {r['p']: {'revenue': r['revenue'] or 0.0, 'cogs': r['cogs'] or 0.0} for r in conn.execute(rev_q).fetchall()}
 		exp_rows = {r['p']: (r['expenses'] or 0.0) for r in conn.execute(exp_q).fetchall()}
+		inc_rows = {r['p']: (r['income'] or 0.0) for r in conn.execute(inc_q).fetchall()}
+		all_periods = set(rev_rows.keys()) | set(exp_rows.keys()) | set(inc_rows.keys())
 		result = []
-		for key in sorted(rev_rows.keys(), reverse=True):
-			rev = float(rev_rows[key]['revenue'])
-			cogs = float(rev_rows[key]['cogs'])
+		for key in sorted(all_periods, reverse=True):
+			rev = float(rev_rows.get(key, {}).get('revenue', 0.0))
+			cogs = float(rev_rows.get(key, {}).get('cogs', 0.0))
 			exp = float(exp_rows.get(key, 0.0))
-			profit = rev - cogs - exp
-			result.append({'period': key, 'revenue': rev, 'cogs': cogs, 'expenses': exp, 'profit': profit})
+			inc = float(inc_rows.get(key, 0.0))
+			profit = rev - cogs - exp + inc
+			result.append({'period': key, 'revenue': rev, 'cogs': cogs, 'expenses': exp, 'other_income': inc, 'profit': profit})
 		return result
 
