@@ -23,7 +23,12 @@ class POSWidget(QtWidgets.QWidget):
 		# Search and cart
 		self.search = QtWidgets.QLineEdit()
 		self.search.setPlaceholderText('Search name or scan barcode... (F2 focus)')
+		try:
+			self.search.setClearButtonEnabled(True)
+		except Exception:
+			pass
 		self.search.returnPressed.connect(self.add_search_item)
+		self.search.textChanged.connect(self.on_search_text_changed)
 
 		self.table = QtWidgets.QTableWidget(0, 5)
 		self.table.setHorizontalHeaderLabels(['Product', 'Qty', 'Price', 'Discount', 'Total'])
@@ -104,8 +109,23 @@ class POSWidget(QtWidgets.QWidget):
 		self.shortcut_checkout.activated.connect(self.handle_checkout)
 		self.shortcut_delete = QtWidgets.QShortcut(QtCore.Qt.Key_Delete, self)
 		self.shortcut_delete.activated.connect(self.remove_selected)
+		self.shortcut_clear = QtWidgets.QShortcut(QtCore.Qt.Key_Escape, self)
+		self.shortcut_clear.activated.connect(lambda: self.search.clear())
 
 		self.load_product_list()
+
+	def on_search_text_changed(self, text: str):
+		q = (text or '').strip()
+		if not q:
+			self.load_product_list()
+			return
+		# Live search suggestions
+		self.products_list.clear()
+		results = self.db.search_products(q)
+		for p in results[:200]:
+			item = QtWidgets.QListWidgetItem(f"{p['name']}  ({p.get('brand_name') or p.get('brand') or ''})  Rs.{float(p['price']):.2f}")
+			item.setData(QtCore.Qt.UserRole, p)
+			self.products_list.addItem(item)
 
 	def load_product_list(self):
 		self.products_list.clear()
