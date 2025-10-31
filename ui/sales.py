@@ -101,6 +101,14 @@ class SalesDialog(QtWidgets.QDialog):
 		layout.addLayout(bar)
 
 		self.refresh()
+		self.resize_to_fit_table()
+
+	def resize_to_fit_table(self):
+		# Resize window to fit table content
+		self.table.resizeColumnsToContents()
+		table_width = self.table.horizontalHeader().length() + 40  # Add padding for scrollbar/margins
+		table_height = min(self.table.verticalHeader().length() + 80, 600)  # Max 600px height
+		self.resize(max(800, table_width), min(600, table_height))
 
 	def refresh(self):
 		rows = self.db.connection().execute('SELECT id, invoice_id, total_amount, discount_amount, payment_type, created_at FROM sales ORDER BY datetime(created_at) DESC LIMIT 200').fetchall()
@@ -113,6 +121,7 @@ class SalesDialog(QtWidgets.QDialog):
 			self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"{r['discount_amount']:.2f}"))
 			self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(r['payment_type']))
 			self.table.setItem(row, 5, QtWidgets.QTableWidgetItem(r['created_at']))
+		self.resize_to_fit_table()
 
 	def current_sale_id(self):
 		row = self.table.currentRow()
