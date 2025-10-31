@@ -24,10 +24,19 @@ except Exception:
 	REPORTLAB_AVAILABLE = False
 
 
-def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], totals: Dict) -> str:
+def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com') -> str:
 	lines = []
 	lines.append(shop_name)
+	# Contact details directly under shop name
+	if phone:
+		lines.append(f'Contact: {phone}')
+	if email:
+		lines.append(f'Email:   {email}')
 	lines.append(f'Invoice: {invoice_id}')
+	if phone:
+		pass
+	if email:
+		pass
 	lines.append('-' * 32)
 	for it in items:
 		name = it.get('name', '')[:16]
@@ -81,7 +90,7 @@ def open_cash_drawer(vid: int = None, pid: int = None) -> bool:
 	return False
 
 
-def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items: List[Dict], totals: Dict) -> str:
+def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com') -> str:
 	"""Generate a simple A4 PDF invoice and return the saved file path."""
 	if not REPORTLAB_AVAILABLE:
 		raise RuntimeError('reportlab is not installed')
@@ -95,8 +104,16 @@ def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items
 	y = height - margin
 	c.setFont('Helvetica-Bold', 14)
 	c.drawString(margin, y, shop_name)
-	y -= 8 * mm
+	y -= 6 * mm
+	# Contact details directly under shop name
 	c.setFont('Helvetica', 10)
+	if phone:
+		c.drawString(margin, y, f"Contact: {phone}")
+		y -= 5 * mm
+	if email:
+		c.drawString(margin, y, f"Email:   {email}")
+		y -= 5 * mm
+	# Invoice and date
 	c.drawString(margin, y, f"Invoice: {invoice_id}")
 	c.drawRightString(width - margin, y, datetime.now().strftime('%Y-%m-%d %H:%M'))
 	y -= 6 * mm
