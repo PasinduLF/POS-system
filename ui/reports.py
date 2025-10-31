@@ -60,10 +60,14 @@ class ReportsWidget(QtWidgets.QWidget):
 		results_label = QtWidgets.QLabel('Report Results:')
 		results_label.setStyleSheet('font-weight: bold; font-size: 12pt; margin-bottom: 5px;')
 		right_panel.addWidget(results_label)
-		self.text = QtWidgets.QPlainTextEdit()
-		self.text.setReadOnly(True)
-		self.text.setFont(QtGui.QFont('Consolas', 10))
-		right_panel.addWidget(self.text)
+		self.table = QtWidgets.QTableWidget()
+		self.table.setAlternatingRowColors(True)
+		self.table.horizontalHeader().setStretchLastSection(True)
+		try:
+			self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+		except Exception:
+			pass
+		right_panel.addWidget(self.table)
 
 		main_layout.addLayout(left_panel, 1)
 		main_layout.addLayout(right_panel, 2)
@@ -81,57 +85,124 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_profit_y.clicked.connect(lambda: self.show_profit('yearly'))
 		self.btn_cashbook.clicked.connect(self.show_cashbook)
 
+	def _populate_table(self, headers: list, rows: list):
+		self.table.setColumnCount(len(headers))
+		self.table.setHorizontalHeaderLabels(headers)
+		self.table.setRowCount(0)
+		for r in rows:
+			row_idx = self.table.rowCount()
+			self.table.insertRow(row_idx)
+			if isinstance(r, dict):
+				for col_idx, header in enumerate(headers):
+					val = r.get(header, '')
+					item = QtWidgets.QTableWidgetItem(str(val) if val is not None else '')
+					if isinstance(val, (int, float)) or (isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit()):
+						item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+					self.table.setItem(row_idx, col_idx, item)
+			else:
+				for col_idx, val in enumerate(r):
+					item = QtWidgets.QTableWidgetItem(str(val) if val is not None else '')
+					if isinstance(val, (int, float)):
+						item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+					self.table.setItem(row_idx, col_idx, item)
+
 	def show_sales(self, period: str):
 		rows = self.db.sales_summary(period)
-		lines = [f"{r['period']}: {r['total']:.2f}" for r in rows]
-		self.text.setPlainText('\n'.join(lines) or 'No data')
+		if not rows:
+			self.table.setColumnCount(2)
+			self.table.setHorizontalHeaderLabels(['Period', 'Total'])
+			self.table.setRowCount(0)
+			return
+		data = [{'Period': r['period'], 'Total (Rs.)': f"{r['total']:.2f}"} for r in rows]
+		self._populate_table(['Period', 'Total (Rs.)'], data)
 
 	def show_top(self):
 		rows = self.db.top_products()
-		lines = [f"{r['name']}: {r['qty']} units, Rs. {r['revenue']:.2f}" for r in rows]
-		self.text.setPlainText('\n'.join(lines) or 'No data')
+		if not rows:
+			self.table.setColumnCount(3)
+			self.table.setHorizontalHeaderLabels(['Product', 'Quantity', 'Revenue (Rs.)'])
+			self.table.setRowCount(0)
+			return
+		data = [{'Product': r['name'], 'Quantity': r['qty'], 'Revenue (Rs.)': f"{r['revenue']:.2f}"} for r in rows]
+		self._populate_table(['Product', 'Quantity', 'Revenue (Rs.)'], data)
 
 	def show_inventory(self):
 		rows = self.db.inventory_report()
-		lines = [f"{r['name']} ({r.get('brand') or ''}): {r['stock_quantity']} pcs (Cost {r['cost_price']:.2f}, Price {r['price']:.2f})" for r in rows]
-		self.text.setPlainText('\n'.join(lines) or 'No data')
+		if not rows:
+			self.table.setColumnCount(6)
+			self.table.setHorizontalHeaderLabels(['Name', 'Brand', 'Stock', 'Cost Price', 'Selling Price', 'Value'])
+			self.table.setRowCount(0)
+			return
+		data = []
+		for r in rows:
+			value = float(r['stock_quantity']) * float(r['cost_price'])
+			data.append({
+				'Name': r['name'],
+				'Brand': r.get('brand') or '',
+				'Stock': r['stock_quantity'],
+				'Cost Price (Rs.)': f"{r['cost_price']:.2f}",
+				'Selling Price (Rs.)': f"{r['price']:.2f}",
+				'Stock Value (Rs.)': f"{value:.2f}"
+			})
+		self._populate_table(['Name', 'Brand', 'Stock', 'Cost Price (Rs.)', 'Selling Price (Rs.)', 'Stock Value (Rs.)'], data)
 
 	def show_expenses(self):
 		rows = self.db.monthly_expense_summary()
-		lines = [f"{r['month']}: Rs. {r['total']:.2f}" for r in rows]
-		self.text.setPlainText('\n'.join(lines) or 'No data')
+		if not rows:
+			self.table.setColumnCount(2)
+			self.table.setHorizontalHeaderLabels(['Month', 'Total (Rs.)'])
+			self.table.setRowCount(0)
+			return
+		data = [{'Month': r['month'], 'Total (Rs.)': f"{r['total']:.2f}"} for r in rows]
+		self._populate_table(['Month', 'Total (Rs.)'], data)
 
 	def show_income(self):
 		rows = self.db.monthly_income_summary()
-		lines = [f"{r['month']}: Rs. {r['total']:.2f}" for r in rows]
-		self.text.setPlainText('\n'.join(lines) or 'No data')
+		if not rows:
+			self.table.setColumnCount(2)
+			self.table.setHorizontalHeaderLabels(['Month', 'Total (Rs.)'])
+			self.table.setRowCount(0)
+			return
+		data = [{'Month': r['month'], 'Total (Rs.)': f"{r['total']:.2f}"} for r in rows]
+		self._populate_table(['Month', 'Total (Rs.)'], data)
 
 	def show_category(self):
 		rows = self.db.category_sales_summary()
-		lines = [f"{r['category']}: Revenue {r['revenue']:.2f}, COGS {r['cogs']:.2f}, Invoices {r['invoices']}" for r in rows]
-		self.text.setPlainText('\n'.join(lines) or 'No data')
+		if not rows:
+			self.table.setColumnCount(4)
+			self.table.setHorizontalHeaderLabels(['Category', 'Revenue (Rs.)', 'COGS (Rs.)', 'Invoices'])
+			self.table.setRowCount(0)
+			return
+		data = [{'Category': r['category'], 'Revenue (Rs.)': f"{r['revenue']:.2f}", 'COGS (Rs.)': f"{r['cogs']:.2f}", 'Invoices': r['invoices']} for r in rows]
+		self._populate_table(['Category', 'Revenue (Rs.)', 'COGS (Rs.)', 'Invoices'], data)
 
 	def show_profit(self, period: str):
 		rows = self.db.profit_report(period)
-		lines = [f"{r['period']}: Revenue {r['revenue']:.2f} - COGS {r['cogs']:.2f} - Expenses {r['expenses']:.2f} + Other Income {r.get('other_income', 0):.2f} = Profit {r['profit']:.2f}" for r in rows]
-		self.text.setPlainText('\n'.join(lines) or 'No data')
+		if not rows:
+			self.table.setColumnCount(6)
+			self.table.setHorizontalHeaderLabels(['Period', 'Revenue (Rs.)', 'COGS (Rs.)', 'Expenses (Rs.)', 'Other Income (Rs.)', 'Profit (Rs.)'])
+			self.table.setRowCount(0)
+			return
+		data = []
+		for r in rows:
+			data.append({
+				'Period': r['period'],
+				'Revenue (Rs.)': f"{r['revenue']:.2f}",
+				'COGS (Rs.)': f"{r['cogs']:.2f}",
+				'Expenses (Rs.)': f"{r['expenses']:.2f}",
+				'Other Income (Rs.)': f"{r.get('other_income', 0):.2f}",
+				'Profit (Rs.)': f"{r['profit']:.2f}"
+			})
+		self._populate_table(['Period', 'Revenue (Rs.)', 'COGS (Rs.)', 'Expenses (Rs.)', 'Other Income (Rs.)', 'Profit (Rs.)'], data)
 
 	def show_cashbook(self):
 		data = self.db.cashbook_report()
-		lines = [
-			'=== CASHBOOK ===',
-			'',
-			f"Cash Sales:        Rs. {data['cash_sales']:.2f}",
-			f"Other Income:      Rs. {data['other_income']:.2f}",
-			f"─────────────────────────────",
-			f"Total Received:    Rs. {data['total_received']:.2f}",
-			'',
-			f"Expenses:          Rs. {data['expenses']:.2f}",
-			'',
-			f"─────────────────────────────",
-			f"NET CASH BALANCE:  Rs. {data['net_cash']:.2f}",
-			'',
-			f"Current Cash Available: Rs. {data['net_cash']:.2f}"
+		rows = [
+			{'Item': 'Cash Sales', 'Amount (Rs.)': f"{data['cash_sales']:.2f}"},
+			{'Item': 'Other Income', 'Amount (Rs.)': f"{data['other_income']:.2f}"},
+			{'Item': 'Total Received', 'Amount (Rs.)': f"{data['total_received']:.2f}"},
+			{'Item': 'Expenses', 'Amount (Rs.)': f"{data['expenses']:.2f}"},
+			{'Item': 'Net Cash Balance', 'Amount (Rs.)': f"{data['net_cash']:.2f}"}
 		]
-		self.text.setPlainText('\n'.join(lines))
+		self._populate_table(['Item', 'Amount (Rs.)'], rows)
 
