@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS sales (
 	payment_type TEXT NOT NULL,
 	paid_amount REAL NOT NULL,
 	change_amount REAL NOT NULL,
+	customer_id INTEGER,
 	user_id INTEGER,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (user_id) REFERENCES users(id)
@@ -69,6 +70,13 @@ CREATE TABLE IF NOT EXISTS expenses (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS customers (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT,
+	phone TEXT,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS other_income (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	description TEXT NOT NULL,
@@ -85,5 +93,6 @@ CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_incurred_on ON expenses(incurred_on);
+CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id);
 CREATE INDEX IF NOT EXISTS idx_other_income_received_on ON other_income(received_on);
 

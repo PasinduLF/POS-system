@@ -102,10 +102,12 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		users_action = manage_menu.addAction('Users...')
 		expenses_action = manage_menu.addAction('Expenses...')
 		income_action = manage_menu.addAction('Other Income...')
+		customers_action = manage_menu.addAction('Customers...')
 		sales_action = manage_menu.addAction('Sales...')
 		users_action.triggered.connect(self._open_users)
 		expenses_action.triggered.connect(self._open_expenses)
 		income_action.triggered.connect(self._open_other_income)
+		customers_action.triggered.connect(self._open_customers)
 		sales_action.triggered.connect(self._open_sales)
 
 		# Role restrictions
@@ -201,6 +203,14 @@ class DashboardWindow(QtWidgets.QMainWindow):
 			dlg.exec_()
 		except Exception as e:
 			QtWidgets.QMessageBox.critical(self, 'Sales', str(e))
+
+	def _open_customers(self):
+		try:
+			from .customers import CustomersDialog
+			dlg = CustomersDialog(self.db, parent=self)
+			dlg.exec_()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Customers', str(e))
 
 	def _logout(self):
 		from ui.login import LoginDialog

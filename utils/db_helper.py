@@ -63,6 +63,28 @@ class Database:
 			conn.execute('CREATE INDEX IF NOT EXISTS idx_other_income_received_on ON other_income(received_on)')
 		except Exception:
 			pass
+		# ensure customers table exists and sales.customer_id column
+		conn.execute(
+			"""
+			CREATE TABLE IF NOT EXISTS customers (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				name TEXT,
+				phone TEXT,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			);
+			"""
+		)
+		# add sales.customer_id if missing
+		sales_cols = {row['name'] for row in conn.execute("PRAGMA table_info(sales)").fetchall()} if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sales'").fetchone() else set()
+		if 'customer_id' not in sales_cols:
+			try:
+				conn.execute('ALTER TABLE sales ADD COLUMN customer_id INTEGER')
+			except Exception:
+				pass
+		try:
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id)')
+		except Exception:
+			pass
 		# ensure products optional columns exist
 		pcols = {row['name'] for row in conn.execute("PRAGMA table_info(products)").fetchall()} if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").fetchone() else set()
 		if 'products' not in {r['name'] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
@@ -294,13 +316,13 @@ class Database:
 		return f'INV{count:06d}'
 
 	@classmethod
-	def create_sale(cls, user_id: int, items: List[Dict[str, Any]], discount_amount: float, payment_type: str, paid_amount: float, change_amount: float) -> str:
+	def create_sale(cls, user_id: int, items: List[Dict[str, Any]], discount_amount: float, payment_type: str, paid_amount: float, change_amount: float, customer_id: Optional[int] = None) -> str:
 		conn = cls.connection()
 		invoice_id = cls.next_invoice_id()
 		with conn:
 			cur = conn.execute(
-				'INSERT INTO sales (invoice_id, total_amount, discount_amount, payment_type, paid_amount, change_amount, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-				(invoice_id, sum(i['line_total'] for i in items), discount_amount, payment_type, paid_amount, change_amount, user_id)
+				'INSERT INTO sales (invoice_id, total_amount, discount_amount, payment_type, paid_amount, change_amount, user_id, customer_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+				(invoice_id, sum(i['line_total'] for i in items), discount_amount, payment_type, paid_amount, change_amount, user_id, customer_id)
 			)
 			sale_id = cur.lastrowid
 			for it in items:
@@ -310,6 +332,41 @@ class Database:
 				)
 				conn.execute('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id=?', (it['quantity'], it['product_id']))
 		return invoice_id
+
+	# Customers
+	@classmethod
+	def upsert_customer(cls, name: Optional[str], phone: Optional[str]) -> Optional[int]:
+		name = (name or '').strip()
+		phone = (phone or '').strip()
+		if not name and not phone:
+			return None
+		conn = cls.connection()
+		with conn:
+			row = None
+			if phone:
+				row = conn.execute('SELECT id FROM customers WHERE phone=?', (phone,)).fetchone()
+			if row:
+				cid = row['id']
+				if name:
+					conn.execute('UPDATE customers SET name=? WHERE id=?', (name, cid))
+				return cid
+			cur = conn.execute('INSERT INTO customers (name, phone) VALUES (?, ?)', (name or None, phone or None))
+			return cur.lastrowid
+
+	@classmethod
+	def list_customers(cls) -> List[Dict[str, Any]]:
+		cur = cls.connection().execute('SELECT id, name, phone, created_at FROM customers ORDER BY datetime(created_at) DESC')
+		return [dict(r) for r in cur.fetchall()]
+
+	@classmethod
+	def update_customer(cls, customer_id: int, name: Optional[str], phone: Optional[str]) -> None:
+		with cls.connection() as conn:
+			conn.execute('UPDATE customers SET name=?, phone=? WHERE id=?', ((name or '').strip() or None, (phone or '').strip() or None, customer_id))
+
+	@classmethod
+	def delete_customer(cls, customer_id: int) -> None:
+		with cls.connection() as conn:
+			conn.execute('DELETE FROM customers WHERE id=?', (customer_id,))
 
 	# Reports
 	@classmethod

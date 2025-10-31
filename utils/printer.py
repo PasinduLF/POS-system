@@ -24,7 +24,7 @@ except Exception:
 	REPORTLAB_AVAILABLE = False
 
 
-def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com') -> str:
+def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com', customer: Dict = None) -> str:
 	lines = []
 	lines.append(shop_name)
 	# Contact details directly under shop name
@@ -33,11 +33,18 @@ def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], tot
 	if email:
 		lines.append(f'Email:   {email}')
 	lines.append(f'Invoice: {invoice_id}')
-	if phone:
-		pass
-	if email:
-		pass
 	lines.append('-' * 32)
+	# Optional customer details
+	if customer:
+		cname = (customer.get('name') or '').strip()
+		cphone = (customer.get('phone') or '').strip()
+		if cname or cphone:
+			lines.append('Customer:')
+			if cname:
+				lines.append(f"  Name : {cname}")
+			if cphone:
+				lines.append(f"  Phone: {cphone}")
+			lines.append('-' * 32)
 	for it in items:
 		name = it.get('name', '')[:16]
 		qty = it['quantity']
@@ -90,7 +97,7 @@ def open_cash_drawer(vid: int = None, pid: int = None) -> bool:
 	return False
 
 
-def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com') -> str:
+def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com', customer: Dict = None) -> str:
 	"""Generate a simple A4 PDF invoice and return the saved file path."""
 	if not REPORTLAB_AVAILABLE:
 		raise RuntimeError('reportlab is not installed')
@@ -119,6 +126,23 @@ def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items
 	y -= 6 * mm
 	c.line(margin, y, width - margin, y)
 	y -= 6 * mm
+	# Optional customer details block
+	if customer:
+		cname = (customer.get('name') or '').strip()
+		cphone = (customer.get('phone') or '').strip()
+		if cname or cphone:
+			c.setFont('Helvetica-Bold', 10)
+			c.drawString(margin, y, 'Customer')
+			y -= 5 * mm
+			c.setFont('Helvetica', 10)
+			if cname:
+				c.drawString(margin, y, f"Name : {cname}")
+				y -= 5 * mm
+			if cphone:
+				c.drawString(margin, y, f"Phone: {cphone}")
+				y -= 6 * mm
+			c.line(margin, y, width - margin, y)
+			y -= 6 * mm
 
 	# headers
 	c.setFont('Helvetica-Bold', 10)

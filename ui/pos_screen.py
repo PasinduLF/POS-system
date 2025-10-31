@@ -55,6 +55,10 @@ class POSWidget(QtWidgets.QWidget):
 		self.checkout = QtWidgets.QPushButton('Checkout & Print (F9)')
 		self.checkout.clicked.connect(self.handle_checkout)
 
+		# Optional customer info
+		self.customer_name = QtWidgets.QLineEdit(); self.customer_name.setPlaceholderText('Customer name (optional)')
+		self.customer_phone = QtWidgets.QLineEdit(); self.customer_phone.setPlaceholderText('Customer phone (optional)')
+
 		self.total_label = QtWidgets.QLabel('Total: 0.00')
 		self.subtotal_label = QtWidgets.QLabel('Subtotal: 0.00')
 		self.change_label = QtWidgets.QLabel('Change: 0.00')
@@ -90,8 +94,10 @@ class POSWidget(QtWidgets.QWidget):
 		right = QtWidgets.QVBoxLayout()
 		r1 = QtWidgets.QHBoxLayout(); r1.addWidget(self.payment_type); r1.addWidget(self.paid_amount)
 		r2 = QtWidgets.QHBoxLayout(); r2.addWidget(self.btn_exact); r2.addWidget(self.btn_500); r2.addWidget(self.btn_1000)
+		r3 = QtWidgets.QHBoxLayout(); r3.addWidget(self.customer_name); r3.addWidget(self.customer_phone)
 		right.addLayout(r1)
 		right.addLayout(r2)
+		right.addLayout(r3)
 		right.addWidget(self.checkout)
 
 		bottom.addLayout(left)
@@ -260,7 +266,9 @@ class POSWidget(QtWidgets.QWidget):
 				'line_total': (it['unit_price'] * it['quantity']) - it.get('discount', 0.0)
 			})
 
-		invoice_id = self.db.create_sale(self.user['id'], items_payload, discount_total, self.payment_type.currentText(), paid, change)
+		# Upsert customer if provided
+		customer_id = self.db.upsert_customer(self.customer_name.text(), self.customer_phone.text())
+		invoice_id = self.db.create_sale(self.user['id'], items_payload, discount_total, self.payment_type.currentText(), paid, change, customer_id)
 
 		receipt_text = format_receipt_lines('Beauty P&C', invoice_id, self.cart, {
 			'subtotal': subtotal,
@@ -268,7 +276,7 @@ class POSWidget(QtWidgets.QWidget):
 			'total': total,
 			'paid': paid,
 			'change': change,
-		})
+		}, phone='0785993262', email='beautypandc@gmail.com', customer={'name': self.customer_name.text().strip(), 'phone': self.customer_phone.text().strip()})
 		print_receipt_text(receipt_text)
 
 		# Generate PDF invoice
@@ -279,7 +287,7 @@ class POSWidget(QtWidgets.QWidget):
 				'total': total,
 				'paid': paid,
 				'change': change,
-			})
+			}, phone='0785993262', email='beautypandc@gmail.com', customer={'name': self.customer_name.text().strip(), 'phone': self.customer_phone.text().strip()})
 			QtWidgets.QMessageBox.information(self, 'Invoice Saved', f'Invoice PDF saved to:\n{pdf_path}')
 		except Exception as e:
 			QtWidgets.QMessageBox.warning(self, 'PDF Error', f'Failed to generate PDF: {e}')
@@ -288,5 +296,7 @@ class POSWidget(QtWidgets.QWidget):
 		self.refresh_table()
 		self.discount_total.setValue(0)
 		self.paid_amount.setValue(0)
+		self.customer_name.clear()
+		self.customer_phone.clear()
 		QtWidgets.QMessageBox.information(self, 'Success', f'Sale saved. Invoice {invoice_id}')
 
