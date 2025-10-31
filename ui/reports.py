@@ -1,29 +1,69 @@
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtCore, QtGui
 
 
 class ReportsWidget(QtWidgets.QWidget):
 	def __init__(self, db, parent=None):
 		super().__init__(parent)
 		self.db = db
-		self.setLayout(QtWidgets.QVBoxLayout())
+		main_layout = QtWidgets.QHBoxLayout(self)
 
-		self.btn_daily = QtWidgets.QPushButton('Daily Sales Summary')
-		self.btn_monthly = QtWidgets.QPushButton('Monthly Sales Summary')
-		self.btn_yearly = QtWidgets.QPushButton('Yearly Sales Summary')
+		# Left panel: categorized buttons
+		left_panel = QtWidgets.QVBoxLayout()
+
+		# Sales Reports Group
+		sales_group = QtWidgets.QGroupBox('📊 Sales Reports')
+		sales_layout = QtWidgets.QGridLayout()
+		self.btn_daily = QtWidgets.QPushButton('Daily Sales')
+		self.btn_monthly = QtWidgets.QPushButton('Monthly Sales')
+		self.btn_yearly = QtWidgets.QPushButton('Yearly Sales')
+		self.btn_category = QtWidgets.QPushButton('Category-wise')
 		self.btn_top = QtWidgets.QPushButton('Top Products')
-		self.btn_inventory = QtWidgets.QPushButton('Inventory Report')
-		self.btn_expenses = QtWidgets.QPushButton('Monthly Expense Summary')
-		self.btn_income = QtWidgets.QPushButton('Monthly Income Summary')
-		self.btn_category = QtWidgets.QPushButton('Category-wise Sales Summary')
-		self.btn_profit_d = QtWidgets.QPushButton('Profit Report (Daily)')
-		self.btn_profit_m = QtWidgets.QPushButton('Profit Report (Monthly)')
-		self.btn_profit_y = QtWidgets.QPushButton('Profit Report (Yearly)')
+		sales_layout.addWidget(self.btn_daily, 0, 0)
+		sales_layout.addWidget(self.btn_monthly, 0, 1)
+		sales_layout.addWidget(self.btn_yearly, 0, 2)
+		sales_layout.addWidget(self.btn_category, 1, 0)
+		sales_layout.addWidget(self.btn_top, 1, 1)
+		sales_group.setLayout(sales_layout)
+		left_panel.addWidget(sales_group)
 
-		for b in [self.btn_daily, self.btn_monthly, self.btn_yearly, self.btn_top, self.btn_inventory, self.btn_expenses, self.btn_income, self.btn_category, self.btn_profit_d, self.btn_profit_m, self.btn_profit_y]:
-			self.layout().addWidget(b)
+		# Financial Reports Group
+		financial_group = QtWidgets.QGroupBox('💰 Financial Reports')
+		financial_layout = QtWidgets.QGridLayout()
+		self.btn_profit_d = QtWidgets.QPushButton('Profit (Daily)')
+		self.btn_profit_m = QtWidgets.QPushButton('Profit (Monthly)')
+		self.btn_profit_y = QtWidgets.QPushButton('Profit (Yearly)')
+		self.btn_expenses = QtWidgets.QPushButton('Expenses Summary')
+		self.btn_income = QtWidgets.QPushButton('Income Summary')
+		financial_layout.addWidget(self.btn_profit_d, 0, 0)
+		financial_layout.addWidget(self.btn_profit_m, 0, 1)
+		financial_layout.addWidget(self.btn_profit_y, 0, 2)
+		financial_layout.addWidget(self.btn_expenses, 1, 0)
+		financial_layout.addWidget(self.btn_income, 1, 1)
+		financial_group.setLayout(financial_layout)
+		left_panel.addWidget(financial_group)
 
-		self.text = QtWidgets.QPlainTextEdit(); self.text.setReadOnly(True)
-		self.layout().addWidget(self.text)
+		# Inventory Reports Group
+		inventory_group = QtWidgets.QGroupBox('📦 Inventory Reports')
+		inventory_layout = QtWidgets.QVBoxLayout()
+		self.btn_inventory = QtWidgets.QPushButton('Current Inventory')
+		inventory_layout.addWidget(self.btn_inventory)
+		inventory_group.setLayout(inventory_layout)
+		left_panel.addWidget(inventory_group)
+
+		left_panel.addStretch()
+
+		# Right panel: results display
+		right_panel = QtWidgets.QVBoxLayout()
+		results_label = QtWidgets.QLabel('Report Results:')
+		results_label.setStyleSheet('font-weight: bold; font-size: 12pt; margin-bottom: 5px;')
+		right_panel.addWidget(results_label)
+		self.text = QtWidgets.QPlainTextEdit()
+		self.text.setReadOnly(True)
+		self.text.setFont(QtGui.QFont('Consolas', 10))
+		right_panel.addWidget(self.text)
+
+		main_layout.addLayout(left_panel, 1)
+		main_layout.addLayout(right_panel, 2)
 
 		self.btn_daily.clicked.connect(lambda: self.show_sales('daily'))
 		self.btn_monthly.clicked.connect(lambda: self.show_sales('monthly'))
