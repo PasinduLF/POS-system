@@ -114,6 +114,12 @@ class POSWidget(QtWidgets.QWidget):
 
 		self.load_product_list()
 
+	def refresh_all(self):
+		# Reload products and refresh cart/totals
+		self.load_product_list()
+		self.refresh_table()
+		self.update_totals()
+
 	def on_search_text_changed(self, text: str):
 		q = (text or '').strip()
 		if not q:

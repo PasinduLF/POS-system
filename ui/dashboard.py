@@ -74,6 +74,9 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		self.fullscreen_action = view_menu.addAction('Toggle Full Screen')
 		self.fullscreen_action.setShortcut('F11')
 		self.fullscreen_action.triggered.connect(self._toggle_fullscreen)
+		refresh_action = view_menu.addAction('Refresh')
+		refresh_action.setShortcut('F5')
+		refresh_action.triggered.connect(self._refresh_all)
 
 		export_menu = menubar.addMenu('Export')
 		self.export_actions = {
@@ -230,4 +233,19 @@ class DashboardWindow(QtWidgets.QMainWindow):
 			self.reports_tab = ReportsWidget(self.db)
 			self.tabs.addTab(self.products_tab, 'Products')
 			self.tabs.addTab(self.reports_tab, 'Reports')
+
+	def _refresh_all(self):
+		# Refresh header stats
+		self.refresh_header()
+		# Refresh POS product list/cart totals
+		try:
+			self.pos_tab.refresh_all()
+		except Exception:
+			pass
+		# Refresh Products list
+		try:
+			self.products_tab.refresh()
+		except Exception:
+			pass
+		# Reports view is on-demand; nothing to refresh here
 
