@@ -58,6 +58,7 @@ class POSWidget(QtWidgets.QWidget):
 		# Optional customer info
 		self.customer_name = QtWidgets.QLineEdit(); self.customer_name.setPlaceholderText('Customer name (optional)')
 		self.customer_phone = QtWidgets.QLineEdit(); self.customer_phone.setPlaceholderText('Customer phone (optional)')
+		self._setup_customer_completers()
 
 		self.total_label = QtWidgets.QLabel('Total: 0.00')
 		self.subtotal_label = QtWidgets.QLabel('Subtotal: 0.00')
@@ -125,6 +126,22 @@ class POSWidget(QtWidgets.QWidget):
 		self.load_product_list()
 		self.refresh_table()
 		self.update_totals()
+		self._setup_customer_completers()
+
+	def _setup_customer_completers(self):
+		# Build autocomplete lists from customers table
+		try:
+			customers = self.db.list_customers()
+		except Exception:
+			customers = []
+		names = [c.get('name') for c in customers if (c.get('name') or '').strip()]
+		phones = [c.get('phone') for c in customers if (c.get('phone') or '').strip()]
+		name_completer = QtWidgets.QCompleter(names)
+		name_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+		self.customer_name.setCompleter(name_completer)
+		phone_completer = QtWidgets.QCompleter(phones)
+		phone_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+		self.customer_phone.setCompleter(phone_completer)
 
 	def on_search_text_changed(self, text: str):
 		q = (text or '').strip()
@@ -298,5 +315,7 @@ class POSWidget(QtWidgets.QWidget):
 		self.paid_amount.setValue(0)
 		self.customer_name.clear()
 		self.customer_phone.clear()
+		# Refresh completers to include newly saved customer
+		self._setup_customer_completers()
 		QtWidgets.QMessageBox.information(self, 'Success', f'Sale saved. Invoice {invoice_id}')
 
