@@ -160,6 +160,21 @@ class ProductsWidget(QtWidgets.QWidget):
 		self.table.setHorizontalHeaderLabels(['Name', 'Brand', 'Category', 'Price', 'Cost', 'Stock', 'Barcode', 'Low'])
 		self.table.horizontalHeader().setStretchLastSection(True)
 
+		# Filter dropdowns
+		filter_layout = QtWidgets.QHBoxLayout()
+		filter_layout.addWidget(QtWidgets.QLabel('Filter by:'))
+		self.filter_brand = QtWidgets.QComboBox()
+		self.filter_brand.addItem('All Brands', None)
+		self.filter_brand.currentIndexChanged.connect(self.refresh)
+		self.filter_category = QtWidgets.QComboBox()
+		self.filter_category.addItem('All Categories', None)
+		self.filter_category.currentIndexChanged.connect(self.refresh)
+		filter_layout.addWidget(QtWidgets.QLabel('Brand:'))
+		filter_layout.addWidget(self.filter_brand)
+		filter_layout.addWidget(QtWidgets.QLabel('Category:'))
+		filter_layout.addWidget(self.filter_category)
+		filter_layout.addStretch()
+
 		self.btn_add = QtWidgets.QPushButton('Add')
 		self.btn_edit = QtWidgets.QPushButton('Edit')
 		self.btn_delete = QtWidgets.QPushButton('Delete')
@@ -172,6 +187,7 @@ class ProductsWidget(QtWidgets.QWidget):
 		self.btn_manage_categories.clicked.connect(self.manage_categories)
 
 		layout = QtWidgets.QVBoxLayout(self)
+		layout.addLayout(filter_layout)
 		layout.addWidget(self.table)
 		bar = QtWidgets.QHBoxLayout()
 		bar.addWidget(self.btn_add)
@@ -182,11 +198,30 @@ class ProductsWidget(QtWidgets.QWidget):
 		bar.addWidget(self.btn_manage_categories)
 		layout.addLayout(bar)
 
+		self._load_filters()
 		self.refresh()
+
+	def _load_filters(self):
+		# Reload filter dropdowns
+		self.filter_brand.clear()
+		self.filter_brand.addItem('All Brands', None)
+		for b in self.db.list_brands():
+			self.filter_brand.addItem(b['name'], b['id'])
+		self.filter_category.clear()
+		self.filter_category.addItem('All Categories', None)
+		for c in self.db.list_categories():
+			self.filter_category.addItem(c['name'], c['id'])
 
 	def refresh(self):
 		self.table.setRowCount(0)
+		filter_brand_id = self.filter_brand.currentData()
+		filter_category_id = self.filter_category.currentData()
 		for p in self.db.list_products():
+			# Apply filters
+			if filter_brand_id is not None and p.get('brand_id') != filter_brand_id:
+				continue
+			if filter_category_id is not None and p.get('category_id') != filter_category_id:
+				continue
 			row = self.table.rowCount()
 			self.table.insertRow(row)
 			self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(p['name']))
@@ -236,11 +271,13 @@ class ProductsWidget(QtWidgets.QWidget):
 		items = self.db.list_brands()
 		dlg = MasterDataDialog('Manage Brands', items, self.db.create_brand, self.db.update_brand, self.db.delete_brand, self)
 		if dlg.exec_():
+			self._load_filters()
 			self.refresh()
 
 	def manage_categories(self):
 		items = self.db.list_categories()
 		dlg = MasterDataDialog('Manage Categories', items, self.db.create_category, self.db.update_category, self.db.delete_category, self)
 		if dlg.exec_():
+			self._load_filters()
 			self.refresh()
 
