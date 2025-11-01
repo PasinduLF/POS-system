@@ -68,10 +68,12 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		logout_action.setShortcut('Ctrl+L')
 		backup_action = file_menu.addAction('Backup Database...')
 		restore_action = file_menu.addAction('Restore Database...')
+		clear_data_action = file_menu.addAction('⚠️ Clear All Data...')
 		exit_action = file_menu.addAction('Exit')
 		logout_action.triggered.connect(self._logout)
 		backup_action.triggered.connect(self._do_backup)
 		restore_action.triggered.connect(self._do_restore)
+		clear_data_action.triggered.connect(self._clear_all_data)
 		exit_action.triggered.connect(self.close)
 
 		# View menu for fullscreen toggle
@@ -131,6 +133,7 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		export_menu.menuAction().setVisible(is_admin)
 		backup_action.setVisible(is_admin)
 		restore_action.setVisible(is_admin)
+		clear_data_action.setVisible(is_admin)
 
 	def _toggle_fullscreen(self):
 		if self.isFullScreen():
@@ -242,6 +245,24 @@ class DashboardWindow(QtWidgets.QMainWindow):
 			dlg.exec_()
 		except Exception as e:
 			QtWidgets.QMessageBox.critical(self, 'Bank Transactions', str(e))
+
+	def _clear_all_data(self):
+		try:
+			from .clear_data import ClearDataDialog
+			dlg = ClearDataDialog(self.db, parent=self)
+			if dlg.exec_() == QtWidgets.QDialog.Accepted:
+				# Data cleared - refresh all screens
+				QtWidgets.QMessageBox.information(
+					self, 
+					'Restart Required', 
+					'All data has been cleared.\n\n'
+					'Please restart the application to refresh all screens.'
+				)
+				# Refresh header and tabs
+				self.refresh_header()
+				self._refresh_all()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Clear Data', str(e))
 
 	def _logout(self):
 		from ui.login import LoginDialog
