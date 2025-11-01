@@ -432,6 +432,26 @@ class Database:
 		with cls.connection() as conn:
 			conn.execute('DELETE FROM customers WHERE id=?', (customer_id,))
 
+	@classmethod
+	def customer_details_report(cls) -> List[Dict[str, Any]]:
+		cur = cls.connection().execute(
+			"""
+			SELECT 
+				c.id,
+				c.name,
+				c.phone,
+				IFNULL(SUM(s.total_amount), 0) AS total_sales,
+				COUNT(s.id) AS invoice_count,
+				MAX(s.created_at) AS last_purchase
+			FROM customers c
+			LEFT JOIN sales s ON s.customer_id = c.id
+			GROUP BY c.id, c.name, c.phone
+			HAVING invoice_count > 0
+			ORDER BY total_sales DESC
+			"""
+		)
+		return [dict(r) for r in cur.fetchall()]
+
 	# Reports
 	@classmethod
 	def daily_totals(cls) -> Dict[str, float]:

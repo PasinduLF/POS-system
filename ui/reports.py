@@ -18,11 +18,13 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_yearly = QtWidgets.QPushButton('Yearly Sales')
 		self.btn_category = QtWidgets.QPushButton('Category-wise')
 		self.btn_top = QtWidgets.QPushButton('Top Products')
+		self.btn_customers = QtWidgets.QPushButton('Customer Details')
 		sales_layout.addWidget(self.btn_daily, 0, 0)
 		sales_layout.addWidget(self.btn_monthly, 0, 1)
 		sales_layout.addWidget(self.btn_yearly, 0, 2)
 		sales_layout.addWidget(self.btn_category, 1, 0)
 		sales_layout.addWidget(self.btn_top, 1, 1)
+		sales_layout.addWidget(self.btn_customers, 1, 2)
 		sales_group.setLayout(sales_layout)
 		left_panel.addWidget(sales_group)
 
@@ -109,6 +111,7 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_purchases_y.clicked.connect(lambda: self.show_purchases('yearly'))
 		self.btn_top_purchased.clicked.connect(self.show_top_purchased)
 		self.btn_suppliers.clicked.connect(self.show_suppliers)
+		self.btn_customers.clicked.connect(self.show_customer_details)
 
 	def _populate_table(self, headers: list, rows: list):
 		self.table.setColumnCount(len(headers))
@@ -287,4 +290,24 @@ class ReportsWidget(QtWidgets.QWidget):
 			{'Item': 'Net Bank Balance', 'Amount (Rs.)': f"{data['net_bank']:.2f}"}
 		]
 		self._populate_table(['Item', 'Amount (Rs.)'], rows)
+
+	def show_customer_details(self):
+		rows = self.db.customer_details_report()
+		if not rows:
+			self.table.setColumnCount(5)
+			self.table.setHorizontalHeaderLabels(['Customer', 'Phone', 'Total Sales (Rs.)', 'Invoice Count', 'Last Purchase'])
+			self.table.setRowCount(0)
+			return
+		
+		data = []
+		for r in rows:
+			data.append({
+				'Customer': r['name'] or 'Unknown',
+				'Phone': r['phone'] or '',
+				'Total Sales (Rs.)': f"{r['total_sales']:.2f}",
+				'Invoice Count': r['invoice_count'],
+				'Last Purchase': r['last_purchase'] or ''
+			})
+		
+		self._populate_table(['Customer', 'Phone', 'Total Sales (Rs.)', 'Invoice Count', 'Last Purchase'], data)
 
