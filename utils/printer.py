@@ -24,7 +24,7 @@ except Exception:
 	REPORTLAB_AVAILABLE = False
 
 
-def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com', customer: Dict = None) -> str:
+def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com', address: str = '', business_reg: str = '', currency_symbol: str = 'Rs.', receipt_footer: str = 'Thank you!', customer: Dict = None) -> str:
 	lines = []
 	lines.append(shop_name)
 	# Contact details directly under shop name
@@ -32,6 +32,10 @@ def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], tot
 		lines.append(f'Contact: {phone}')
 	if email:
 		lines.append(f'Email:   {email}')
+	if address:
+		lines.append(f'Address: {address}')
+	if business_reg:
+		lines.append(f'Reg No:  {business_reg}')
 	lines.append(f'Invoice: {invoice_id}')
 	lines.append('-' * 32)
 	# Optional customer details
@@ -53,12 +57,14 @@ def format_receipt_lines(shop_name: str, invoice_id: str, items: List[Dict], tot
 		lines.append(f"{name:<16}{qty:>3} x {price:>6.2f}")
 		lines.append(f"{'':<16}{'':>3}   {line_total:>6.2f}")
 	lines.append('-' * 32)
-	lines.append(f"Subtotal: {totals.get('subtotal', 0):.2f}")
-	lines.append(f"Discount: {totals.get('discount', 0):.2f}")
-	lines.append(f"Total:    {totals.get('total', 0):.2f}")
-	lines.append(f"Paid:     {totals.get('paid', 0):.2f}")
-	lines.append(f"Change:   {totals.get('change', 0):.2f}")
-	lines.append('Thank you!')
+	lines.append(f"Subtotal: {currency_symbol} {totals.get('subtotal', 0):.2f}")
+	if totals.get('tax', 0) > 0:
+		lines.append(f"Tax:      {currency_symbol} {totals.get('tax', 0):.2f}")
+	lines.append(f"Discount: {currency_symbol} {totals.get('discount', 0):.2f}")
+	lines.append(f"Total:    {currency_symbol} {totals.get('total', 0):.2f}")
+	lines.append(f"Paid:     {currency_symbol} {totals.get('paid', 0):.2f}")
+	lines.append(f"Change:   {currency_symbol} {totals.get('change', 0):.2f}")
+	lines.append(receipt_footer)
 	return '\n'.join(lines)
 
 
@@ -97,7 +103,7 @@ def open_cash_drawer(vid: int = None, pid: int = None) -> bool:
 	return False
 
 
-def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com', customer: Dict = None) -> str:
+def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items: List[Dict], totals: Dict, phone: str = '0785993262', email: str = 'beautypandc@gmail.com', address: str = '', business_reg: str = '', currency_symbol: str = 'Rs.', customer: Dict = None) -> str:
 	"""Generate a simple A4 PDF invoice and return the saved file path."""
 	if not REPORTLAB_AVAILABLE:
 		raise RuntimeError('reportlab is not installed')
@@ -178,24 +184,29 @@ def generate_invoice_pdf(output_dir: str, shop_name: str, invoice_id: str, items
 	y -= 8 * mm
 	c.setFont('Helvetica-Bold', 11)
 	sub = float(totals.get('subtotal', 0))
+	tax = float(totals.get('tax', 0))
 	dis = float(totals.get('discount', 0))
 	tot = float(totals.get('total', 0))
 	paid = float(totals.get('paid', 0))
 	chg = float(totals.get('change', 0))
 	c.drawRightString(width - 30 * mm, y, 'Subtotal:')
-	c.drawRightString(width - margin, y, f"{sub:.2f}")
+	c.drawRightString(width - margin, y, f"{currency_symbol} {sub:.2f}")
 	y -= 6 * mm
+	if tax > 0:
+		c.drawRightString(width - 30 * mm, y, 'Tax:')
+		c.drawRightString(width - margin, y, f"{currency_symbol} {tax:.2f}")
+		y -= 6 * mm
 	c.drawRightString(width - 30 * mm, y, 'Discount:')
-	c.drawRightString(width - margin, y, f"{dis:.2f}")
+	c.drawRightString(width - margin, y, f"{currency_symbol} {dis:.2f}")
 	y -= 6 * mm
 	c.drawRightString(width - 30 * mm, y, 'Total:')
-	c.drawRightString(width - margin, y, f"{tot:.2f}")
+	c.drawRightString(width - margin, y, f"{currency_symbol} {tot:.2f}")
 	y -= 6 * mm
 	c.drawRightString(width - 30 * mm, y, 'Paid:')
-	c.drawRightString(width - margin, y, f"{paid:.2f}")
+	c.drawRightString(width - margin, y, f"{currency_symbol} {paid:.2f}")
 	y -= 6 * mm
 	c.drawRightString(width - 30 * mm, y, 'Change:')
-	c.drawRightString(width - margin, y, f"{chg:.2f}")
+	c.drawRightString(width - margin, y, f"{currency_symbol} {chg:.2f}")
 
 	y -= 12 * mm
 	c.setFont('Helvetica', 9)

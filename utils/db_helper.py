@@ -176,6 +176,16 @@ class Database:
 			conn.execute('CREATE INDEX IF NOT EXISTS idx_bank_transactions_created_at ON bank_transactions(created_at)')
 		except Exception:
 			pass
+		# Ensure settings table exists
+		conn.execute(
+			"""
+			CREATE TABLE IF NOT EXISTS settings (
+				key TEXT PRIMARY KEY,
+				value TEXT NOT NULL,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			);
+			"""
+		)
 
 	@classmethod
 	def connection(cls) -> sqlite3.Connection:
@@ -375,9 +385,10 @@ class Database:
 	# Sales
 	@classmethod
 	def next_invoice_id(cls) -> str:
+		prefix = cls.get_setting('invoice_prefix', 'INV')
 		row = cls.connection().execute('SELECT COUNT(*) AS c FROM sales').fetchone()
 		count = (row['c'] if row else 0) + 1
-		return f'INV{count:06d}'
+		return f'{prefix}{count:06d}'
 
 	@classmethod
 	def create_sale(cls, user_id: int, items: List[Dict[str, Any]], discount_amount: float, payment_type: str, paid_amount: float, change_amount: float, customer_id: Optional[int] = None) -> str:
@@ -639,9 +650,10 @@ class Database:
 	# Purchases
 	@classmethod
 	def next_bill_id(cls) -> str:
+		prefix = cls.get_setting('bill_prefix', 'BILL')
 		row = cls.connection().execute('SELECT COUNT(*) AS c FROM purchases').fetchone()
 		count = (row['c'] if row else 0) + 1
-		return f'BILL{count:06d}'
+		return f'{prefix}{count:06d}'
 
 	@classmethod
 	def create_purchase(cls, user_id: int, items: List[Dict[str, Any]], supplier_name: Optional[str], payment_type: str, paid_amount: float) -> str:
@@ -806,4 +818,23 @@ class Database:
 			'total_paid_out': total_paid_out,
 			'net_bank': net_bank
 		}
+
+	# Settings
+	@classmethod
+	def get_setting(cls, key: str, default: str = '') -> str:
+		row = cls.connection().execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
+		return row['value'] if row else default
+
+	@classmethod
+	def set_setting(cls, key: str, value: str) -> None:
+		with cls.connection() as conn:
+			conn.execute(
+				'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+				(key, value)
+			)
+
+	@classmethod
+	def get_all_settings(cls) -> Dict[str, str]:
+		cur = cls.connection().execute('SELECT key, value FROM settings')
+		return {row['key']: row['value'] for row in cur.fetchall()}
 

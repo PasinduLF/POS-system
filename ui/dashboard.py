@@ -127,6 +127,12 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		purchases_action.triggered.connect(self._open_purchases)
 		bank_action.triggered.connect(self._open_bank_transactions)
 
+		# Settings menu (at the end)
+		settings_menu = menubar.addMenu('Settings')
+		settings_action = settings_menu.addAction('Settings...')
+		settings_action.setShortcut('Ctrl+S')
+		settings_action.triggered.connect(self._open_settings)
+
 		# Role restrictions
 		is_admin = self.user['role'] == 'admin'
 		manage_menu.menuAction().setVisible(is_admin)
@@ -263,6 +269,16 @@ class DashboardWindow(QtWidgets.QMainWindow):
 				self._refresh_all()
 		except Exception as e:
 			QtWidgets.QMessageBox.critical(self, 'Clear Data', str(e))
+
+	def _open_settings(self):
+		try:
+			from .settings import SettingsDialog
+			dlg = SettingsDialog(self.db, parent=self)
+			if dlg.exec_() == QtWidgets.QDialog.Accepted:
+				# Settings saved - refresh screens if needed
+				self._refresh_all()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Settings', str(e))
 
 	def _logout(self):
 		from ui.login import LoginDialog

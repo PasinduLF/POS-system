@@ -174,3 +174,4 @@ class PurchasesDialog(QtWidgets.QDialog):
 		except Exception as e:
 			QtWidgets.QMessageBox.critical(self, 'Delete Failed', str(e))
 
+

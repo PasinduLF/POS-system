@@ -149,3 +149,4 @@ class BankTransactionsDialog(QtWidgets.QDialog):
 		if dlg.exec_():
 			self.refresh()
 
+

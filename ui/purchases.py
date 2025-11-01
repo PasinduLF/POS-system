@@ -312,3 +312,4 @@ class PurchaseWidget(QtWidgets.QWidget):
 		self.paid_amount.setValue(0)
 		self.supplier_name.clear()
 		QtWidgets.QMessageBox.information(self, 'Success', f'Purchase saved. Bill ID: {bill_id}\nStock updated automatically.')
+

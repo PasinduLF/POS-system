@@ -49,6 +49,11 @@ class POSWidget(QtWidgets.QWidget):
 
 		self.payment_type = QtWidgets.QComboBox()
 		self.payment_type.addItems(['Cash', 'Card', 'QR', 'Other'])
+		# Set default payment method from settings
+		default_payment = db.get_setting('default_payment_method', 'Cash')
+		idx = self.payment_type.findText(default_payment)
+		if idx >= 0:
+			self.payment_type.setCurrentIndex(idx)
 		self.paid_amount = QtWidgets.QDoubleSpinBox()
 		self.paid_amount.setPrefix('Paid: ')
 		self.paid_amount.setMaximum(1_000_000)
@@ -264,14 +269,50 @@ class POSWidget(QtWidgets.QWidget):
 		if not self.cart:
 			QtWidgets.QMessageBox.information(self, 'Empty', 'Cart is empty')
 			return
+		
+		# Check if customer is required
+		require_customer = self.db.get_setting('require_customer', 'false').lower() == 'true'
+		if require_customer:
+			if not self.customer_name.text().strip() and not self.customer_phone.text().strip():
+				QtWidgets.QMessageBox.warning(self, 'Customer Required', 'Customer name or phone is required for sales.')
+				return
+		
 		subtotal = sum((it['unit_price'] * it['quantity']) - it.get('discount', 0.0) for it in self.cart)
 		discount_total = self.discount_total.value()
-		total = max(0.0, subtotal - discount_total)
+		
+		# Apply tax if enabled
+		tax_enabled = self.db.get_setting('tax_enabled', 'false').lower() == 'true'
+		tax_percentage = float(self.db.get_setting('tax_percentage', '0.0'))
+		tax_method = self.db.get_setting('tax_method', 'Inclusive')
+		
+		if tax_enabled and tax_percentage > 0:
+			if tax_method == 'Inclusive':
+				# Tax is included in prices, calculate from subtotal
+				tax_amount = subtotal * (tax_percentage / (100 + tax_percentage))
+				total = subtotal - discount_total
+			else:
+				# Tax is exclusive, add to subtotal
+				tax_amount = (subtotal - discount_total) * (tax_percentage / 100)
+				total = subtotal - discount_total + tax_amount
+		else:
+			tax_amount = 0.0
+			total = max(0.0, subtotal - discount_total)
+		
+		# Apply cash rounding
+		cash_rounding = self.db.get_setting('cash_rounding', 'No Rounding')
+		if cash_rounding != 'No Rounding':
+			rounding_map = {'Round to 0.05': 0.05, 'Round to 0.50': 0.50, 'Round to 1.00': 1.00}
+			round_to = rounding_map.get(cash_rounding, 0.01)
+			import math
+			total = round(math.ceil(total / round_to) * round_to, 2)
+		
 		paid = self.paid_amount.value()
-		if paid < total:
+		allow_partial = self.db.get_setting('allow_partial_payment', 'false').lower() == 'true'
+		
+		if not allow_partial and paid < total:
 			QtWidgets.QMessageBox.warning(self, 'Insufficient', 'Paid amount is less than total')
 			return
-		change = paid - total
+		change = max(0.0, paid - total)
 
 		items_payload = []
 		for it in self.cart:
@@ -283,31 +324,71 @@ class POSWidget(QtWidgets.QWidget):
 				'line_total': (it['unit_price'] * it['quantity']) - it.get('discount', 0.0)
 			})
 
-		# Upsert customer if provided
-		customer_id = self.db.upsert_customer(self.customer_name.text(), self.customer_phone.text())
+		# Upsert customer if provided or auto-create is enabled
+		auto_create_customer = self.db.get_setting('auto_create_customer', 'true').lower() == 'true'
+		customer_id = None
+		if auto_create_customer or self.customer_name.text().strip() or self.customer_phone.text().strip():
+			customer_id = self.db.upsert_customer(self.customer_name.text(), self.customer_phone.text())
+		
 		invoice_id = self.db.create_sale(self.user['id'], items_payload, discount_total, self.payment_type.currentText(), paid, change, customer_id)
 
-		receipt_text = format_receipt_lines('Beauty P&C', invoice_id, self.cart, {
+		# Get shop settings from database
+		shop_name = self.db.get_setting('shop_name', 'Beauty P&C')
+		shop_phone = self.db.get_setting('shop_phone', '0785993262')
+		shop_email = self.db.get_setting('shop_email', 'beautypandc@gmail.com')
+		shop_address = self.db.get_setting('shop_address', '')
+		business_reg = self.db.get_setting('business_reg', '')
+		currency_symbol = self.db.get_setting('currency_symbol', 'Rs.')
+		receipt_footer = self.db.get_setting('receipt_footer', 'Thank you!')
+		show_address = self.db.get_setting('show_address_on_receipt', 'false').lower() == 'true'
+		show_customer = self.db.get_setting('show_customer_on_receipt', 'Always')
+		show_tax = self.db.get_setting('show_tax_on_receipt', 'false').lower() == 'true'
+
+		# Prepare customer dict based on settings
+		customer_dict = None
+		if show_customer == 'Always' or (show_customer == 'Optional' and (self.customer_name.text().strip() or self.customer_phone.text().strip())):
+			customer_dict = {'name': self.customer_name.text().strip(), 'phone': self.customer_phone.text().strip()}
+
+		receipt_totals = {
 			'subtotal': subtotal,
 			'discount': discount_total,
 			'total': total,
 			'paid': paid,
 			'change': change,
-		}, phone='0785993262', email='beautypandc@gmail.com', customer={'name': self.customer_name.text().strip(), 'phone': self.customer_phone.text().strip()})
-		print_receipt_text(receipt_text)
+		}
+		
+		if tax_enabled and show_tax:
+			receipt_totals['tax'] = tax_amount
 
-		# Generate PDF invoice
-		try:
-			pdf_path = generate_invoice_pdf(self.invoices_dir, 'Beauty P&C', invoice_id, self.cart, {
-				'subtotal': subtotal,
-				'discount': discount_total,
-				'total': total,
-				'paid': paid,
-				'change': change,
-			}, phone='0785993262', email='beautypandc@gmail.com', customer={'name': self.customer_name.text().strip(), 'phone': self.customer_phone.text().strip()})
-			QtWidgets.QMessageBox.information(self, 'Invoice Saved', f'Invoice PDF saved to:\n{pdf_path}')
-		except Exception as e:
-			QtWidgets.QMessageBox.warning(self, 'PDF Error', f'Failed to generate PDF: {e}')
+		receipt_text = format_receipt_lines(
+			shop_name, invoice_id, self.cart, receipt_totals,
+			phone=shop_phone, email=shop_email, address=shop_address if show_address else '',
+			business_reg=business_reg, currency_symbol=currency_symbol, receipt_footer=receipt_footer,
+			customer=customer_dict
+		)
+		
+		# Auto-print receipt if enabled
+		auto_print = self.db.get_setting('auto_print_receipt', 'false').lower() == 'true'
+		if auto_print:
+			print_receipt_text(receipt_text)
+		else:
+			# Always print for now (can add option to show preview)
+			print_receipt_text(receipt_text)
+
+		# Auto-generate PDF if enabled
+		auto_pdf = self.db.get_setting('auto_generate_pdf', 'false').lower() == 'true'
+		if auto_pdf:
+			try:
+				pdf_path = generate_invoice_pdf(
+					self.invoices_dir, shop_name, invoice_id, self.cart, receipt_totals,
+					phone=shop_phone, email=shop_email, address=shop_address if show_address else '',
+					business_reg=business_reg, currency_symbol=currency_symbol,
+					customer=customer_dict
+				)
+				if not auto_print:  # Only show message if not auto-printing
+					QtWidgets.QMessageBox.information(self, 'Invoice Saved', f'Invoice PDF saved to:\n{pdf_path}')
+			except Exception as e:
+				QtWidgets.QMessageBox.warning(self, 'PDF Error', f'Failed to generate PDF: {e}')
 
 		self.cart.clear()
 		self.refresh_table()
