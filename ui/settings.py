@@ -137,6 +137,8 @@ class SettingsDialog(QtWidgets.QDialog):
 		display_tab = QtWidgets.QWidget()
 		display_layout = QtWidgets.QFormLayout()
 		
+		self.theme = QtWidgets.QComboBox()
+		self.theme.addItems(['Light', 'Dark'])
 		self.date_format = QtWidgets.QComboBox()
 		self.date_format.addItems(['YYYY-MM-DD', 'DD/MM/YYYY', 'DD-MM-YYYY', 'MM/DD/YYYY'])
 		self.time_format = QtWidgets.QComboBox()
@@ -147,6 +149,7 @@ class SettingsDialog(QtWidgets.QDialog):
 		self.currency_position = QtWidgets.QComboBox()
 		self.currency_position.addItems(['Before Amount', 'After Amount'])
 		
+		display_layout.addRow('Theme:', self.theme)
 		display_layout.addRow('Date Format:', self.date_format)
 		display_layout.addRow('Time Format:', self.time_format)
 		display_layout.addRow('Decimal Places:', self.decimal_places)
@@ -223,6 +226,10 @@ class SettingsDialog(QtWidgets.QDialog):
 		self.require_customer.setChecked(settings.get('require_customer', 'false').lower() == 'true')
 		
 		# Display & Format
+		theme = settings.get('theme', 'Light')
+		idx = self.theme.findText(theme)
+		if idx >= 0:
+			self.theme.setCurrentIndex(idx)
 		date_format = settings.get('date_format', 'YYYY-MM-DD')
 		idx = self.date_format.findText(date_format)
 		if idx >= 0:
@@ -271,10 +278,15 @@ class SettingsDialog(QtWidgets.QDialog):
 		self.db.set_setting('auto_create_customer', 'true' if self.auto_create_customer.isChecked() else 'false')
 		self.db.set_setting('require_customer', 'true' if self.require_customer.isChecked() else 'false')
 		
+		self.db.set_setting('theme', self.theme.currentText())
 		self.db.set_setting('date_format', self.date_format.currentText())
 		self.db.set_setting('time_format', self.time_format.currentText())
 		self.db.set_setting('decimal_places', str(self.decimal_places.value()))
 		self.db.set_setting('currency_position', self.currency_position.currentText())
+		
+		# Apply theme immediately
+		from ui.theme import apply_theme
+		apply_theme(self.db.get_setting('theme', 'Light'))
 		
 		QtWidgets.QMessageBox.information(self, 'Settings Saved', 'All settings have been saved successfully.')
 		self.accept()

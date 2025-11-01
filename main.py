@@ -34,15 +34,10 @@ def initialize_database():
 
 
 def apply_styles(app: QtWidgets.QApplication):
-	app.setStyleSheet('''
-		QMainWindow { background: #f7f7f9; }
-		QTabWidget::pane { border: 1px solid #dcdce0; }
-		QTabBar::tab { padding: 6px 12px; }
-		QPushButton { padding: 6px 10px; background: #2d7dff; color: white; border: none; border-radius: 3px; }
-		QPushButton:disabled { background: #9ab8ff; }
-		QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit { padding: 6px; border: 1px solid #dcdce0; border-radius: 3px; background: white; }
-		QTableWidget { gridline-color: #e6e6ea; }
-	''')
+	"""Apply theme based on settings."""
+	from ui.theme import apply_theme
+	theme = Database.get_setting('theme', 'Light')
+	apply_theme(theme, app)
 
 
 def run():

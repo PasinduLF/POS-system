@@ -273,8 +273,12 @@ class DashboardWindow(QtWidgets.QMainWindow):
 	def _open_settings(self):
 		try:
 			from .settings import SettingsDialog
+			from .theme import apply_theme
 			dlg = SettingsDialog(self.db, parent=self)
 			if dlg.exec_() == QtWidgets.QDialog.Accepted:
+				# Apply theme immediately if changed
+				theme = self.db.get_setting('theme', 'Light')
+				apply_theme(theme)
 				# Settings saved - refresh screens if needed
 				self._refresh_all()
 		except Exception as e:

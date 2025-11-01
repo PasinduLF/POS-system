@@ -117,6 +117,12 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.table.setColumnCount(len(headers))
 		self.table.setHorizontalHeaderLabels(headers)
 		self.table.setRowCount(0)
+		
+		# Get theme to set proper text color for items
+		theme = self.db.get_setting('theme', 'Light')
+		is_dark = theme.lower() == 'dark'
+		text_color = QtGui.QColor('#e0e0e0') if is_dark else QtGui.QColor('#333333')
+		
 		for r in rows:
 			row_idx = self.table.rowCount()
 			self.table.insertRow(row_idx)
@@ -126,12 +132,16 @@ class ReportsWidget(QtWidgets.QWidget):
 					item = QtWidgets.QTableWidgetItem(str(val) if val is not None else '')
 					if isinstance(val, (int, float)) or (isinstance(val, str) and val.replace('.', '', 1).replace('-', '', 1).isdigit()):
 						item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+					# Ensure text color respects theme
+					item.setForeground(QtGui.QBrush(text_color))
 					self.table.setItem(row_idx, col_idx, item)
 			else:
 				for col_idx, val in enumerate(r):
 					item = QtWidgets.QTableWidgetItem(str(val) if val is not None else '')
 					if isinstance(val, (int, float)):
 						item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+					# Ensure text color respects theme
+					item.setForeground(QtGui.QBrush(text_color))
 					self.table.setItem(row_idx, col_idx, item)
 
 	def show_sales(self, period: str):
