@@ -36,14 +36,33 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_income = QtWidgets.QPushButton('Income Summary')
 		self.btn_cashbook = QtWidgets.QPushButton('📗 Cashbook')
 		self.btn_cashbook.setStyleSheet('font-weight: bold;')
+		self.btn_bankbook = QtWidgets.QPushButton('🏦 Bankbook')
+		self.btn_bankbook.setStyleSheet('font-weight: bold;')
 		financial_layout.addWidget(self.btn_profit_d, 0, 0)
 		financial_layout.addWidget(self.btn_profit_m, 0, 1)
 		financial_layout.addWidget(self.btn_profit_y, 0, 2)
 		financial_layout.addWidget(self.btn_expenses, 1, 0)
 		financial_layout.addWidget(self.btn_income, 1, 1)
 		financial_layout.addWidget(self.btn_cashbook, 1, 2)
+		financial_layout.addWidget(self.btn_bankbook, 2, 0)
 		financial_group.setLayout(financial_layout)
 		left_panel.addWidget(financial_group)
+
+		# Purchase Reports Group
+		purchase_group = QtWidgets.QGroupBox('🛒 Purchase Reports')
+		purchase_layout = QtWidgets.QGridLayout()
+		self.btn_purchases_d = QtWidgets.QPushButton('Daily Purchases')
+		self.btn_purchases_m = QtWidgets.QPushButton('Monthly Purchases')
+		self.btn_purchases_y = QtWidgets.QPushButton('Yearly Purchases')
+		self.btn_top_purchased = QtWidgets.QPushButton('Top Purchased')
+		self.btn_suppliers = QtWidgets.QPushButton('Supplier Summary')
+		purchase_layout.addWidget(self.btn_purchases_d, 0, 0)
+		purchase_layout.addWidget(self.btn_purchases_m, 0, 1)
+		purchase_layout.addWidget(self.btn_purchases_y, 0, 2)
+		purchase_layout.addWidget(self.btn_top_purchased, 1, 0)
+		purchase_layout.addWidget(self.btn_suppliers, 1, 1)
+		purchase_group.setLayout(purchase_layout)
+		left_panel.addWidget(purchase_group)
 
 		# Inventory Reports Group
 		inventory_group = QtWidgets.QGroupBox('📦 Inventory Reports')
@@ -84,6 +103,12 @@ class ReportsWidget(QtWidgets.QWidget):
 		self.btn_profit_m.clicked.connect(lambda: self.show_profit('monthly'))
 		self.btn_profit_y.clicked.connect(lambda: self.show_profit('yearly'))
 		self.btn_cashbook.clicked.connect(self.show_cashbook)
+		self.btn_bankbook.clicked.connect(self.show_bankbook)
+		self.btn_purchases_d.clicked.connect(lambda: self.show_purchases('daily'))
+		self.btn_purchases_m.clicked.connect(lambda: self.show_purchases('monthly'))
+		self.btn_purchases_y.clicked.connect(lambda: self.show_purchases('yearly'))
+		self.btn_top_purchased.clicked.connect(self.show_top_purchased)
+		self.btn_suppliers.clicked.connect(self.show_suppliers)
 
 	def _populate_table(self, headers: list, rows: list):
 		self.table.setColumnCount(len(headers))
@@ -200,9 +225,66 @@ class ReportsWidget(QtWidgets.QWidget):
 		rows = [
 			{'Item': 'Cash Sales', 'Amount (Rs.)': f"{data['cash_sales']:.2f}"},
 			{'Item': 'Other Income', 'Amount (Rs.)': f"{data['other_income']:.2f}"},
+			{'Item': 'Bank Withdrawals', 'Amount (Rs.)': f"{data['withdrawals']:.2f}"},
 			{'Item': 'Total Received', 'Amount (Rs.)': f"{data['total_received']:.2f}"},
-			{'Item': 'Expenses', 'Amount (Rs.)': f"{data['expenses']:.2f}"},
+			{'Item': 'Cash Expenses', 'Amount (Rs.)': f"{data['cash_expenses']:.2f}"},
+			{'Item': 'Cash Purchases', 'Amount (Rs.)': f"{data['cash_purchases']:.2f}"},
+			{'Item': 'Bank Deposits', 'Amount (Rs.)': f"{data['deposits']:.2f}"},
+			{'Item': 'Total Paid Out', 'Amount (Rs.)': f"{data['total_paid_out']:.2f}"},
 			{'Item': 'Net Cash Balance', 'Amount (Rs.)': f"{data['net_cash']:.2f}"}
+		]
+		self._populate_table(['Item', 'Amount (Rs.)'], rows)
+
+	def show_purchases(self, period: str):
+		rows = self.db.purchases_summary(period)
+		if not rows:
+			self.table.setColumnCount(3)
+			self.table.setHorizontalHeaderLabels(['Period', 'Total (Rs.)', 'Count'])
+			self.table.setRowCount(0)
+			return
+		data = [
+			{'Period': r['period'], 'Total (Rs.)': f"{r['total']:.2f}", 'Count': r['count']}
+			for r in rows
+		]
+		self._populate_table(['Period', 'Total (Rs.)', 'Count'], data)
+
+	def show_top_purchased(self):
+		rows = self.db.top_purchased_products()
+		if not rows:
+			self.table.setColumnCount(3)
+			self.table.setHorizontalHeaderLabels(['Product', 'Quantity', 'Total Cost (Rs.)'])
+			self.table.setRowCount(0)
+			return
+		data = [
+			{'Product': r['name'], 'Quantity': r['qty'], 'Total Cost (Rs.)': f"{r['total_cost']:.2f}"}
+			for r in rows
+		]
+		self._populate_table(['Product', 'Quantity', 'Total Cost (Rs.)'], data)
+
+	def show_suppliers(self):
+		rows = self.db.supplier_summary()
+		if not rows:
+			self.table.setColumnCount(3)
+			self.table.setHorizontalHeaderLabels(['Supplier', 'Total (Rs.)', 'Count'])
+			self.table.setRowCount(0)
+			return
+		data = [
+			{'Supplier': r['supplier'], 'Total (Rs.)': f"{r['total']:.2f}", 'Count': r['count']}
+			for r in rows
+		]
+		self._populate_table(['Supplier', 'Total (Rs.)', 'Count'], data)
+
+	def show_bankbook(self):
+		data = self.db.bankbook_report()
+		rows = [
+			{'Item': 'Card Sales', 'Amount (Rs.)': f"{data['card_sales']:.2f}"},
+			{'Item': 'Deposits', 'Amount (Rs.)': f"{data['deposits']:.2f}"},
+			{'Item': 'Total Received', 'Amount (Rs.)': f"{data['total_received']:.2f}"},
+			{'Item': 'Card Purchases', 'Amount (Rs.)': f"{data['card_purchases']:.2f}"},
+			{'Item': 'Card Expenses', 'Amount (Rs.)': f"{data['card_expenses']:.2f}"},
+			{'Item': 'Withdrawals', 'Amount (Rs.)': f"{data['withdrawals']:.2f}"},
+			{'Item': 'Total Paid Out', 'Amount (Rs.)': f"{data['total_paid_out']:.2f}"},
+			{'Item': 'Net Bank Balance', 'Amount (Rs.)': f"{data['net_bank']:.2f}"}
 		]
 		self._populate_table(['Item', 'Amount (Rs.)'], rows)
 

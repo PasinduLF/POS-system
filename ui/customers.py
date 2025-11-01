@@ -65,3 +65,5 @@ class CustomersDialog(QtWidgets.QDialog):
 		self.refresh()
 
 
+
+

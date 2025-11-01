@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 	description TEXT NOT NULL,
 	category TEXT,
 	amount REAL NOT NULL,
+	payment_type TEXT NOT NULL DEFAULT 'Cash',
 	incurred_on DATE NOT NULL,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -86,6 +87,39 @@ CREATE TABLE IF NOT EXISTS other_income (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS purchases (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	bill_id TEXT UNIQUE NOT NULL,
+	total_amount REAL NOT NULL,
+	supplier_name TEXT,
+	payment_type TEXT NOT NULL,
+	paid_amount REAL NOT NULL,
+	user_id INTEGER,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_items (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	purchase_id INTEGER NOT NULL,
+	product_id INTEGER NOT NULL,
+	quantity INTEGER NOT NULL,
+	unit_cost REAL NOT NULL,
+	line_total REAL NOT NULL,
+	FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
+	FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+CREATE TABLE IF NOT EXISTS bank_transactions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	transaction_type TEXT CHECK(transaction_type IN ('Deposit', 'Withdrawal')) NOT NULL,
+	amount REAL NOT NULL,
+	description TEXT,
+	user_id INTEGER,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
 CREATE INDEX IF NOT EXISTS idx_products_brand_id ON products(brand_id);
@@ -95,4 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_incurred_on ON expenses(incurred_on);
 CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id);
 CREATE INDEX IF NOT EXISTS idx_other_income_received_on ON other_income(received_on);
+CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchases(created_at);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_id ON purchase_items(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_bank_transactions_created_at ON bank_transactions(created_at);
 

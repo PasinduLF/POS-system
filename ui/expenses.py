@@ -6,13 +6,14 @@ class ExpensesDialog(QtWidgets.QDialog):
 		super().__init__(parent)
 		self.db = db
 		self.setWindowTitle('Expenses')
-		self.table = QtWidgets.QTableWidget(0, 4)
-		self.table.setHorizontalHeaderLabels(['Description', 'Category', 'Amount', 'Date'])
+		self.table = QtWidgets.QTableWidget(0, 5)
+		self.table.setHorizontalHeaderLabels(['Description', 'Category', 'Amount', 'Payment', 'Date'])
 		self.table.horizontalHeader().setStretchLastSection(True)
 
 		self.desc = QtWidgets.QLineEdit(); self.desc.setPlaceholderText('Description')
 		self.cat = QtWidgets.QLineEdit(); self.cat.setPlaceholderText('Category')
 		self.amount = QtWidgets.QDoubleSpinBox(); self.amount.setMaximum(10_000_000)
+		self.payment_type = QtWidgets.QComboBox(); self.payment_type.addItems(['Cash', 'Card', 'Cheque', 'Credit', 'Other'])
 		self.date = QtWidgets.QDateEdit(); self.date.setCalendarPopup(True)
 		self.date.setDate(self.date.date().currentDate())
 		btn_add = QtWidgets.QPushButton('Add Expense')
@@ -26,6 +27,7 @@ class ExpensesDialog(QtWidgets.QDialog):
 		form.addWidget(self.desc)
 		form.addWidget(self.cat)
 		form.addWidget(self.amount)
+		form.addWidget(self.payment_type)
 		form.addWidget(self.date)
 		form.addWidget(btn_add)
 		layout.addLayout(form)
@@ -37,14 +39,17 @@ class ExpensesDialog(QtWidgets.QDialog):
 	def refresh(self):
 		# Show latest expenses
 		conn = self.db.connection()
-		rows = conn.execute('SELECT description, category, amount, incurred_on FROM expenses ORDER BY incurred_on DESC, id DESC LIMIT 200').fetchall()
+		rows = conn.execute('SELECT description, category, amount, payment_type, incurred_on FROM expenses ORDER BY incurred_on DESC, id DESC LIMIT 200').fetchall()
 		self.table.setRowCount(0)
 		for r in rows:
 			row = self.table.rowCount(); self.table.insertRow(row)
 			self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(r['description']))
 			self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(r['category'] or ''))
 			self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(f"{r['amount']:.2f}"))
-			self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(r['incurred_on']))
+			# Access payment_type directly (sqlite3.Row supports dict-like access but not .get())
+			payment_type = r['payment_type'] if r['payment_type'] else 'Cash'
+			self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(payment_type))
+			self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(r['incurred_on']))
 		# Summary
 		sumrows = self.db.monthly_expense_summary()
 		self.summary.setPlainText('\n'.join([f"{r['month']}: {r['total']:.2f}" for r in sumrows]) or 'No data')
@@ -56,10 +61,13 @@ class ExpensesDialog(QtWidgets.QDialog):
 			return
 		c = self.cat.text().strip()
 		a = float(self.amount.value())
+		payment_type = self.payment_type.currentText()
 		incurred = self.date.date().toString('yyyy-MM-dd')
-		self.db.add_expense(d, c, a, incurred)
+		self.db.add_expense(d, c, a, incurred, payment_type)
 		self.desc.clear(); self.cat.clear(); self.amount.setValue(0)
 		self.refresh()
+
+
 
 
 

@@ -62,3 +62,5 @@ class OtherIncomeDialog(QtWidgets.QDialog):
 		self.refresh()
 
 
+
+

@@ -2,6 +2,7 @@ from PyQt5 import QtWidgets
 from .pos_screen import POSWidget
 from .products import ProductsWidget
 from .reports import ReportsWidget
+from .purchases import PurchaseWidget
 from utils.backup import backup_database, export_table_to_csv, export_table_to_excel
 import os
 import zipfile
@@ -16,10 +17,12 @@ class DashboardWindow(QtWidgets.QMainWindow):
 
 		self.tabs = QtWidgets.QTabWidget()
 		self.pos_tab = POSWidget(db, self.user)
+		self.purchases_tab = PurchaseWidget(db, self.user)
 		self.products_tab = ProductsWidget(db)
 		self.reports_tab = ReportsWidget(db)
 
 		self.tabs.addTab(self.pos_tab, 'POS')
+		self.tabs.addTab(self.purchases_tab, 'Purchases')
 		self.tabs.addTab(self.products_tab, 'Products')
 		self.tabs.addTab(self.reports_tab, 'Reports')
 
@@ -45,6 +48,8 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		self.showMaximized()
 
 		if self.user['role'] == 'cashier':
+			idx = self.tabs.indexOf(self.purchases_tab)
+			self.tabs.removeTab(idx)
 			idx = self.tabs.indexOf(self.products_tab)
 			self.tabs.removeTab(idx)
 			idx = self.tabs.indexOf(self.reports_tab)
@@ -96,6 +101,12 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		self.export_actions['expenses'].triggered.connect(lambda: self._export_table('expenses', 'csv'))
 		self.export_actions['other_income'] = export_menu.addAction('Other Income (CSV)')
 		self.export_actions['other_income'].triggered.connect(lambda: self._export_table('other_income', 'csv'))
+		self.export_actions['purchases'] = export_menu.addAction('Purchases (CSV)')
+		self.export_actions['purchases'].triggered.connect(lambda: self._export_table('purchases', 'csv'))
+		self.export_actions['purchase_items'] = export_menu.addAction('Purchase Items (CSV)')
+		self.export_actions['purchase_items'].triggered.connect(lambda: self._export_table('purchase_items', 'csv'))
+		self.export_actions['bank_transactions'] = export_menu.addAction('Bank Transactions (CSV)')
+		self.export_actions['bank_transactions'].triggered.connect(lambda: self._export_table('bank_transactions', 'csv'))
 		self.export_actions['inventory_xlsx'].triggered.connect(lambda: self._export_table('products', 'xlsx'))
 
 		manage_menu = menubar.addMenu('Manage')
@@ -104,11 +115,15 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		income_action = manage_menu.addAction('Other Income...')
 		customers_action = manage_menu.addAction('Customers...')
 		sales_action = manage_menu.addAction('Sales...')
+		purchases_action = manage_menu.addAction('Purchases...')
+		bank_action = manage_menu.addAction('Bank Transactions...')
 		users_action.triggered.connect(self._open_users)
 		expenses_action.triggered.connect(self._open_expenses)
 		income_action.triggered.connect(self._open_other_income)
 		customers_action.triggered.connect(self._open_customers)
 		sales_action.triggered.connect(self._open_sales)
+		purchases_action.triggered.connect(self._open_purchases)
+		bank_action.triggered.connect(self._open_bank_transactions)
 
 		# Role restrictions
 		is_admin = self.user['role'] == 'admin'
@@ -212,6 +227,22 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		except Exception as e:
 			QtWidgets.QMessageBox.critical(self, 'Customers', str(e))
 
+	def _open_purchases(self):
+		try:
+			from .purchase_management import PurchasesDialog
+			dlg = PurchasesDialog(self.db, parent=self)
+			dlg.exec_()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Purchases', str(e))
+
+	def _open_bank_transactions(self):
+		try:
+			from .bank_transactions import BankTransactionsDialog
+			dlg = BankTransactionsDialog(self.db, self.user, parent=self)
+			dlg.exec_()
+		except Exception as e:
+			QtWidgets.QMessageBox.critical(self, 'Bank Transactions', str(e))
+
 	def _logout(self):
 		from ui.login import LoginDialog
 		app = QtWidgets.QApplication.instance()
@@ -239,8 +270,10 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		self.pos_tab = POSWidget(self.db, self.user)
 		self.tabs.addTab(self.pos_tab, 'POS')
 		if self.user['role'] == 'admin':
+			self.purchases_tab = PurchaseWidget(self.db, self.user)
 			self.products_tab = ProductsWidget(self.db)
 			self.reports_tab = ReportsWidget(self.db)
+			self.tabs.addTab(self.purchases_tab, 'Purchases')
 			self.tabs.addTab(self.products_tab, 'Products')
 			self.tabs.addTab(self.reports_tab, 'Reports')
 
@@ -250,6 +283,11 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		# Refresh POS product list/cart totals
 		try:
 			self.pos_tab.refresh_all()
+		except Exception:
+			pass
+		# Refresh Purchases product list/cart totals
+		try:
+			self.purchases_tab.refresh_all()
 		except Exception:
 			pass
 		# Refresh Products list
