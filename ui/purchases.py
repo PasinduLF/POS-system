@@ -266,6 +266,7 @@ class PurchaseWidget(QtWidgets.QWidget):
 		for it in self.cart:
 			items_payload.append({
 				'product_id': it['product_id'],
+				'variant_id': it.get('variant_id'),
 				'quantity': it['quantity'],
 				'unit_cost': it['unit_cost'],
 				'line_total': it['line_total']

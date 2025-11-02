@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtCore, QtGui
 
 
 class MasterDataDialog(QtWidgets.QDialog):
@@ -111,12 +111,28 @@ class ProductDialog(QtWidgets.QDialog):
 		form.addRow('Barcode', self.barcode)
 		form.addRow('Low stock threshold', self.low_stock)
 
+		# Variants management
+		self.variants_tab = None
+		self.tabs = QtWidgets.QTabWidget()
+		
+		# Product details tab
+		product_tab = QtWidgets.QWidget()
+		product_layout = QtWidgets.QVBoxLayout(product_tab)
+		product_layout.addLayout(form)
+		
+		self.tabs.addTab(product_tab, 'Product Details')
+		
+		# Variants tab (only for existing products)
+		if product:
+			self.variants_tab = VariantsTabWidget(self.db, product['id'])
+			self.tabs.addTab(self.variants_tab, 'Variants')
+		
 		btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
 		btns.accepted.connect(self.accept)
 		btns.rejected.connect(self.reject)
 
 		layout = QtWidgets.QVBoxLayout(self)
-		layout.addLayout(form)
+		layout.addWidget(self.tabs)
 		layout.addWidget(btns)
 
 		if product:
@@ -150,6 +166,222 @@ class ProductDialog(QtWidgets.QDialog):
 			'barcode': self.barcode.text().strip() or None,
 			'low_stock_threshold': int(self.low_stock.value()),
 		}
+
+
+class VariantDialog(QtWidgets.QDialog):
+	"""Dialog for adding/editing a product variant."""
+	def __init__(self, db, product_id: int, variant=None, parent=None):
+		super().__init__(parent)
+		self.db = db
+		self.product_id = product_id
+		self.variant = variant
+		self.setWindowTitle('Variant' if variant else 'Add Variant')
+		self.setMinimumWidth(500)
+		
+		form = QtWidgets.QFormLayout()
+		
+		self.size = QtWidgets.QLineEdit()
+		self.size.setPlaceholderText('e.g., S, M, L, 100ml')
+		form.addRow('Size:', self.size)
+		
+		self.color = QtWidgets.QLineEdit()
+		self.color.setPlaceholderText('e.g., Red, Blue, Black')
+		form.addRow('Color:', self.color)
+		
+		self.sku = QtWidgets.QLineEdit()
+		self.sku.setPlaceholderText('SKU code')
+		form.addRow('SKU:', self.sku)
+		
+		self.barcode = QtWidgets.QLineEdit()
+		self.barcode.setPlaceholderText('Variant barcode')
+		form.addRow('Barcode:', self.barcode)
+		
+		self.price = QtWidgets.QDoubleSpinBox()
+		self.price.setMaximum(1_000_000)
+		self.price.setPrefix('Price: ')
+		self.price.setValue(0.0)
+		form.addRow(self.price)
+		
+		self.cost_price = QtWidgets.QDoubleSpinBox()
+		self.cost_price.setMaximum(1_000_000)
+		self.cost_price.setPrefix('Cost Price: ')
+		self.cost_price.setValue(0.0)
+		form.addRow(self.cost_price)
+		
+		self.stock = QtWidgets.QSpinBox()
+		self.stock.setMaximum(1_000_000)
+		self.stock.setValue(0)
+		form.addRow('Stock Quantity:', self.stock)
+		
+		self.low_stock = QtWidgets.QSpinBox()
+		self.low_stock.setMaximum(10_000)
+		self.low_stock.setValue(5)
+		form.addRow('Low Stock Threshold:', self.low_stock)
+		
+		if variant:
+			self.size.setText(variant.get('size') or '')
+			self.color.setText(variant.get('color') or '')
+			self.sku.setText(variant.get('sku') or '')
+			self.barcode.setText(variant.get('barcode') or '')
+			self.price.setValue(float(variant.get('price') or 0))
+			self.cost_price.setValue(float(variant.get('cost_price') or 0))
+			self.stock.setValue(int(variant.get('stock_quantity') or 0))
+			self.low_stock.setValue(int(variant.get('low_stock_threshold') or 5))
+		
+		btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+		btns.accepted.connect(self.accept)
+		btns.rejected.connect(self.reject)
+		
+		layout = QtWidgets.QVBoxLayout(self)
+		layout.addLayout(form)
+		layout.addWidget(btns)
+	
+	def get_data(self):
+		return {
+			'size': self.size.text().strip() or None,
+			'color': self.color.text().strip() or None,
+			'sku': self.sku.text().strip() or None,
+			'barcode': self.barcode.text().strip() or None,
+			'price': float(self.price.value()) if self.price.value() > 0 else None,
+			'cost_price': float(self.cost_price.value()),
+			'stock_quantity': int(self.stock.value()),
+			'low_stock_threshold': int(self.low_stock.value())
+		}
+
+
+class VariantsTabWidget(QtWidgets.QWidget):
+	"""Widget for managing product variants."""
+	def __init__(self, db, product_id: int, parent=None):
+		super().__init__(parent)
+		self.db = db
+		self.product_id = product_id
+		
+		layout = QtWidgets.QVBoxLayout(self)
+		
+		# Header
+		header = QtWidgets.QHBoxLayout()
+		title = QtWidgets.QLabel('Product Variants')
+		title.setStyleSheet('font-size: 12pt; font-weight: bold;')
+		header.addWidget(title)
+		header.addStretch()
+		
+		self.btn_add = QtWidgets.QPushButton('➕ Add Variant')
+		self.btn_edit = QtWidgets.QPushButton('✏️ Edit')
+		self.btn_delete = QtWidgets.QPushButton('🗑️ Delete')
+		self.btn_refresh = QtWidgets.QPushButton('🔄 Refresh')
+		
+		self.btn_add.clicked.connect(self.add_variant)
+		self.btn_edit.clicked.connect(self.edit_variant)
+		self.btn_delete.clicked.connect(self.delete_variant)
+		self.btn_refresh.clicked.connect(self.refresh)
+		
+		header.addWidget(self.btn_add)
+		header.addWidget(self.btn_edit)
+		header.addWidget(self.btn_delete)
+		header.addWidget(self.btn_refresh)
+		
+		layout.addLayout(header)
+		
+		# Variants table
+		self.table = QtWidgets.QTableWidget(0, 8)
+		self.table.setHorizontalHeaderLabels(['Size', 'Color', 'SKU', 'Barcode', 'Price', 'Cost Price', 'Stock', 'Low Stock'])
+		self.table.horizontalHeader().setStretchLastSection(True)
+		self.table.setAlternatingRowColors(True)
+		self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+		layout.addWidget(self.table)
+		
+		self.refresh()
+	
+	def refresh(self):
+		"""Refresh the variants table."""
+		variants = self.db.list_variants(self.product_id)
+		self.table.setRowCount(0)
+		
+		theme = self.db.get_setting('theme', 'Light')
+		is_dark = theme.lower() == 'dark'
+		text_color = QtGui.QColor('#e0e0e0') if is_dark else QtGui.QColor('#333333')
+		
+		for v in variants:
+			row = self.table.rowCount()
+			self.table.insertRow(row)
+			
+			items = [
+				v.get('size') or '',
+				v.get('color') or '',
+				v.get('sku') or '',
+				v.get('barcode') or '',
+				f"{v.get('price') or 0:.2f}" if v.get('price') else '',
+				f"{v.get('cost_price') or 0:.2f}",
+				str(v.get('stock_quantity') or 0),
+				str(v.get('low_stock_threshold') or 5)
+			]
+			
+			for col, text in enumerate(items):
+				item = QtWidgets.QTableWidgetItem(text)
+				if col in (5, 6, 7):  # Price, Cost Price, Stock, Low Stock columns
+					item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+				item.setForeground(QtGui.QBrush(text_color))
+				item.setData(QtCore.Qt.UserRole, v['id'])
+				self.table.setItem(row, col, item)
+	
+	def current_variant_id(self):
+		"""Get the ID of the currently selected variant."""
+		row = self.table.currentRow()
+		if row < 0:
+			return None
+		item = self.table.item(row, 0)
+		if item:
+			return item.data(QtCore.Qt.UserRole)
+		return None
+	
+	def add_variant(self):
+		"""Add a new variant."""
+		dlg = VariantDialog(self.db, self.product_id, parent=self)
+		if dlg.exec_() == QtWidgets.QDialog.Accepted:
+			data = dlg.get_data()
+			self.db.create_variant(self.product_id, **data)
+			self.refresh()
+	
+	def edit_variant(self):
+		"""Edit the selected variant."""
+		variant_id = self.current_variant_id()
+		if not variant_id:
+			QtWidgets.QMessageBox.warning(self, 'Select Variant', 'Please select a variant to edit.')
+			return
+		variant = self.db.get_variant(variant_id)
+		if not variant:
+			return
+		dlg = VariantDialog(self.db, self.product_id, variant, parent=self)
+		if dlg.exec_() == QtWidgets.QDialog.Accepted:
+			data = dlg.get_data()
+			self.db.update_variant(variant_id, **data)
+			self.refresh()
+	
+	def delete_variant(self):
+		"""Delete the selected variant."""
+		variant_id = self.current_variant_id()
+		if not variant_id:
+			QtWidgets.QMessageBox.warning(self, 'Select Variant', 'Please select a variant to delete.')
+			return
+		variant = self.db.get_variant(variant_id)
+		if not variant:
+			return
+		
+		# Build variant description
+		variant_desc = []
+		if variant.get('size'):
+			variant_desc.append(f"Size: {variant['size']}")
+		if variant.get('color'):
+			variant_desc.append(f"Color: {variant['color']}")
+		if not variant_desc:
+			variant_desc.append('this variant')
+		
+		if QtWidgets.QMessageBox.question(
+			self, 'Confirm Delete', 
+			f'Delete variant ({", ".join(variant_desc)})?'
+		) == QtWidgets.QMessageBox.Yes:
+			self.db.delete_variant(variant_id)
+			self.refresh()
 
 
 class ProductsWidget(QtWidgets.QWidget):

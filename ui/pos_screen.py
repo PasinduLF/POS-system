@@ -174,13 +174,24 @@ class POSWidget(QtWidgets.QWidget):
 	def add_from_list(self, item):
 		p = item.data(QtCore.Qt.UserRole)
 		if p:
-			self.add_to_cart(p, 1)
+			self._add_product_to_cart(p, 1)
 
 	def add_search_item(self):
 		q = self.search.text().strip()
 		if not q:
 			return
-		# barcode exact first
+		# Check for variant barcode first
+		variant_info = self.db.get_variant_by_barcode(q)
+		if variant_info:
+			# This is a variant barcode
+			product = {k: v for k, v in variant_info.items() if not k.startswith('variant_') and k != 'variant_id'}
+			product['id'] = variant_info.get('id')
+			variant = self.db.get_variant(variant_info['variant_id'])
+			self.add_to_cart(product, 1, variant)
+			self.search.clear()
+			return
+		
+		# barcode exact first (product barcode)
 		prod = self.db.get_product_by_barcode(q)
 		if not prod:
 			res = self.db.search_products(q)
@@ -188,23 +199,57 @@ class POSWidget(QtWidgets.QWidget):
 		if not prod:
 			QtWidgets.QMessageBox.information(self, 'Not found', 'Product not found')
 			return
-		self.add_to_cart(prod, 1)
+		self._add_product_to_cart(prod, 1)
 		self.search.clear()
 
-	def add_to_cart(self, product, quantity):
+	def _add_product_to_cart(self, product, quantity):
+		"""Internal method to handle adding product (with variant selection if needed)."""
+		variants = self.db.list_variants(product['id'])
+		if variants:
+			# Product has variants, show selector
+			from ui.variant_selector import VariantSelectorDialog
+			dlg = VariantSelectorDialog(self.db, product, self)
+			if dlg.exec_() == QtWidgets.QDialog.Accepted:
+				selected_variant = dlg.get_selection()
+				self.add_to_cart(product, quantity, selected_variant)
+		else:
+			# No variants, use base product
+			self.add_to_cart(product, quantity, None)
+
+	def add_to_cart(self, product, quantity, variant=None):
+		# Check if same product and variant combination exists
 		for it in self.cart:
-			if it['product_id'] == product['id']:
+			if it['product_id'] == product['id'] and it.get('variant_id') == (variant['id'] if variant else None):
 				it['quantity'] += quantity
 				it['line_total'] = (it['unit_price'] * it['quantity']) - it.get('discount', 0)
 				self.refresh_table()
 				return
+		
+		# Determine price - use variant price if available, otherwise product price
+		if variant and variant.get('price'):
+			price = float(variant['price'])
+		else:
+			price = float(product['price'])
+		
+		# Build display name with variant info
+		name = product['name']
+		variant_info = []
+		if variant:
+			if variant.get('size'):
+				variant_info.append(f"Size: {variant['size']}")
+			if variant.get('color'):
+				variant_info.append(f"Color: {variant['color']}")
+			if variant_info:
+				name += f" ({', '.join(variant_info)})"
+		
 		item = {
 			'product_id': product['id'],
-			'name': product['name'],
+			'variant_id': variant['id'] if variant else None,
+			'name': name,
 			'quantity': quantity,
-			'unit_price': float(product['price']),
+			'unit_price': price,
 			'discount': 0.0,
-			'line_total': float(product['price']) * quantity,
+			'line_total': price * quantity,
 		}
 		self.cart.append(item)
 		self.refresh_table()
@@ -318,6 +363,7 @@ class POSWidget(QtWidgets.QWidget):
 		for it in self.cart:
 			items_payload.append({
 				'product_id': it['product_id'],
+				'variant_id': it.get('variant_id'),
 				'quantity': it['quantity'],
 				'unit_price': it['unit_price'],
 				'discount': it.get('discount', 0.0),

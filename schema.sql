@@ -53,12 +53,14 @@ CREATE TABLE IF NOT EXISTS sale_items (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	sale_id INTEGER NOT NULL,
 	product_id INTEGER NOT NULL,
+	variant_id INTEGER,
 	quantity INTEGER NOT NULL,
 	unit_price REAL NOT NULL,
 	discount REAL NOT NULL DEFAULT 0,
 	line_total REAL NOT NULL,
 	FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
-	FOREIGN KEY (product_id) REFERENCES products(id)
+	FOREIGN KEY (product_id) REFERENCES products(id),
+	FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -103,11 +105,28 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	purchase_id INTEGER NOT NULL,
 	product_id INTEGER NOT NULL,
+	variant_id INTEGER,
 	quantity INTEGER NOT NULL,
 	unit_cost REAL NOT NULL,
 	line_total REAL NOT NULL,
 	FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
-	FOREIGN KEY (product_id) REFERENCES products(id)
+	FOREIGN KEY (product_id) REFERENCES products(id),
+	FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS product_variants (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	product_id INTEGER NOT NULL,
+	size TEXT,
+	color TEXT,
+	sku TEXT UNIQUE,
+	barcode TEXT UNIQUE,
+	price REAL,
+	cost_price REAL NOT NULL DEFAULT 0,
+	stock_quantity INTEGER NOT NULL DEFAULT 0,
+	low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS bank_transactions (
@@ -138,4 +157,9 @@ CREATE INDEX IF NOT EXISTS idx_other_income_received_on ON other_income(received
 CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchases(created_at);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_id ON purchase_items(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_bank_transactions_created_at ON bank_transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_barcode ON product_variants(barcode);
+CREATE INDEX IF NOT EXISTS idx_product_variants_sku ON product_variants(sku);
+CREATE INDEX IF NOT EXISTS idx_sale_items_variant_id ON sale_items(variant_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_variant_id ON purchase_items(variant_id);
 

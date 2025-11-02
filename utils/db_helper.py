@@ -186,6 +186,49 @@ class Database:
 			);
 			"""
 		)
+		# Ensure product_variants table exists
+		conn.execute(
+			"""
+			CREATE TABLE IF NOT EXISTS product_variants (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				product_id INTEGER NOT NULL,
+				size TEXT,
+				color TEXT,
+				sku TEXT UNIQUE,
+				barcode TEXT UNIQUE,
+				price REAL,
+				cost_price REAL NOT NULL DEFAULT 0,
+				stock_quantity INTEGER NOT NULL DEFAULT 0,
+				low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+			);
+			"""
+		)
+		try:
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id)')
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_product_variants_barcode ON product_variants(barcode)')
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_product_variants_sku ON product_variants(sku)')
+		except Exception:
+			pass
+		# Add variant_id to sale_items if missing
+		if 'sale_items' in {r['name'] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
+			si_cols = {row['name'] for row in conn.execute("PRAGMA table_info(sale_items)").fetchall()}
+			if 'variant_id' not in si_cols:
+				try:
+					conn.execute('ALTER TABLE sale_items ADD COLUMN variant_id INTEGER')
+					conn.execute('CREATE INDEX IF NOT EXISTS idx_sale_items_variant_id ON sale_items(variant_id)')
+				except Exception:
+					pass
+		# Add variant_id to purchase_items if missing
+		if 'purchase_items' in {r['name'] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}:
+			pi_cols = {row['name'] for row in conn.execute("PRAGMA table_info(purchase_items)").fetchall()}
+			if 'variant_id' not in pi_cols:
+				try:
+					conn.execute('ALTER TABLE purchase_items ADD COLUMN variant_id INTEGER')
+					conn.execute('CREATE INDEX IF NOT EXISTS idx_purchase_items_variant_id ON purchase_items(variant_id)')
+				except Exception:
+					pass
 
 	@classmethod
 	def connection(cls) -> sqlite3.Connection:
@@ -332,20 +375,51 @@ class Database:
 		q = f'%{query.strip()}%'
 		cur = cls.connection().execute(
 			"""
-			SELECT p.*, c.name AS category_name, b.name AS brand_name
+			SELECT DISTINCT p.*, c.name AS category_name, b.name AS brand_name
 			FROM products p
 			LEFT JOIN categories c ON c.id = p.category_id
 			LEFT JOIN brands b ON b.id = p.brand_id
+			LEFT JOIN product_variants pv ON pv.product_id = p.id
 			WHERE p.name LIKE ? OR p.barcode LIKE ? OR IFNULL(b.name,'') LIKE ? OR IFNULL(p.brand,'') LIKE ?
+				OR pv.barcode LIKE ? OR pv.sku LIKE ? OR IFNULL(pv.size,'') LIKE ? OR IFNULL(pv.color,'') LIKE ?
 			ORDER BY p.name
 			""",
-			(q, q, q, q)
+			(q, q, q, q, q, q, q, q)
 		)
 		return [dict(r) for r in cur.fetchall()]
 
 	@classmethod
 	def get_product_by_barcode(cls, barcode: str) -> Optional[Dict[str, Any]]:
+		# First try product barcode
 		row = cls.connection().execute('SELECT * FROM products WHERE barcode=?', (barcode,)).fetchone()
+		if row:
+			return dict(row)
+		# Then try variant barcode
+		row = cls.connection().execute(
+			"""
+			SELECT p.* FROM products p
+			JOIN product_variants pv ON pv.product_id = p.id
+			WHERE pv.barcode=?
+			LIMIT 1
+			""",
+			(barcode,)
+		).fetchone()
+		return dict(row) if row else None
+	
+	@classmethod
+	def get_variant_by_barcode(cls, barcode: str) -> Optional[Dict[str, Any]]:
+		"""Get variant by barcode, returns both product and variant info."""
+		row = cls.connection().execute(
+			"""
+			SELECT p.*, pv.id AS variant_id, pv.size, pv.color, pv.sku, pv.barcode AS variant_barcode,
+				pv.price AS variant_price, pv.cost_price AS variant_cost_price, pv.stock_quantity AS variant_stock
+			FROM products p
+			JOIN product_variants pv ON pv.product_id = p.id
+			WHERE pv.barcode=?
+			LIMIT 1
+			""",
+			(barcode,)
+		).fetchone()
 		return dict(row) if row else None
 
 	@classmethod
@@ -379,8 +453,29 @@ class Database:
 
 	@classmethod
 	def low_stock_products(cls) -> List[Dict[str, Any]]:
-		cur = cls.connection().execute('SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE stock_quantity <= low_stock_threshold ORDER BY name')
-		return [dict(r) for r in cur.fetchall()]
+		"""Get products and variants with low stock."""
+		# Products with low stock
+		product_rows = cls.connection().execute(
+			'SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE stock_quantity <= low_stock_threshold ORDER BY name'
+		).fetchall()
+		result = [dict(r) for r in product_rows]
+		
+		# Variants with low stock
+		variant_rows = cls.connection().execute(
+			"""
+			SELECT pv.id, p.name || ' - ' || 
+				COALESCE(pv.size || ' ', '') || COALESCE(pv.color, '') AS name,
+				pv.stock_quantity AS stock_quantity,
+				pv.low_stock_threshold AS low_stock_threshold
+			FROM product_variants pv
+			JOIN products p ON p.id = pv.product_id
+			WHERE pv.stock_quantity <= pv.low_stock_threshold
+			ORDER BY p.name, pv.size, pv.color
+			"""
+		).fetchall()
+		result.extend([dict(r) for r in variant_rows])
+		
+		return result
 
 	# Sales
 	@classmethod
@@ -667,14 +762,20 @@ class Database:
 			)
 			purchase_id = cur.lastrowid
 			for it in items:
+				variant_id = it.get('variant_id')
 				conn.execute(
-					'INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost, line_total) VALUES (?, ?, ?, ?, ?)',
-					(purchase_id, it['product_id'], it['quantity'], it['unit_cost'], it['line_total'])
+					'INSERT INTO purchase_items (purchase_id, product_id, variant_id, quantity, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?)',
+					(purchase_id, it['product_id'], variant_id, it['quantity'], it['unit_cost'], it['line_total'])
 				)
-				# Update product stock (increase) and cost_price (if different)
-				conn.execute('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id=?', (it['quantity'], it['product_id']))
-				# Update cost_price to the latest purchase cost
-				conn.execute('UPDATE products SET cost_price = ? WHERE id=?', (it['unit_cost'], it['product_id']))
+				# Update stock - if variant exists, update variant stock, otherwise product stock
+				if variant_id:
+					conn.execute('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id=?', (it['quantity'], variant_id))
+					# Update variant cost_price to the latest purchase cost
+					conn.execute('UPDATE product_variants SET cost_price = ? WHERE id=?', (it['unit_cost'], variant_id))
+				else:
+					conn.execute('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id=?', (it['quantity'], it['product_id']))
+					# Update cost_price to the latest purchase cost
+					conn.execute('UPDATE products SET cost_price = ? WHERE id=?', (it['unit_cost'], it['product_id']))
 		return bill_id
 
 	@classmethod
@@ -987,4 +1088,76 @@ class Database:
 			(limit,)
 		)
 		return [dict(r) for r in cur.fetchall()]
+
+	# Product Variants
+	@classmethod
+	def list_variants(cls, product_id: int) -> List[Dict[str, Any]]:
+		"""Get all variants for a product."""
+		cur = cls.connection().execute(
+			'SELECT * FROM product_variants WHERE product_id=? ORDER BY size, color',
+			(product_id,)
+		)
+		return [dict(r) for r in cur.fetchall()]
+
+	@classmethod
+	def get_variant(cls, variant_id: int) -> Optional[Dict[str, Any]]:
+		"""Get a variant by ID."""
+		row = cls.connection().execute('SELECT * FROM product_variants WHERE id=?', (variant_id,)).fetchone()
+		return dict(row) if row else None
+
+	@classmethod
+	def create_variant(cls, product_id: int, size: Optional[str], color: Optional[str], sku: Optional[str], 
+					   barcode: Optional[str], price: Optional[float], cost_price: float, 
+					   stock_quantity: int, low_stock_threshold: int) -> int:
+		"""Create a new product variant."""
+		with cls.connection() as conn:
+			cur = conn.execute(
+				'INSERT INTO product_variants (product_id, size, color, sku, barcode, price, cost_price, stock_quantity, low_stock_threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+				(product_id, size, color, sku, barcode, price, cost_price, stock_quantity, low_stock_threshold)
+			)
+			return cur.lastrowid
+
+	@classmethod
+	def update_variant(cls, variant_id: int, size: Optional[str], color: Optional[str], sku: Optional[str],
+					   barcode: Optional[str], price: Optional[float], cost_price: float,
+					   stock_quantity: int, low_stock_threshold: int) -> None:
+		"""Update a product variant."""
+		with cls.connection() as conn:
+			conn.execute(
+				'UPDATE product_variants SET size=?, color=?, sku=?, barcode=?, price=?, cost_price=?, stock_quantity=?, low_stock_threshold=? WHERE id=?',
+				(size, color, sku, barcode, price, cost_price, stock_quantity, low_stock_threshold, variant_id)
+			)
+
+	@classmethod
+	def delete_variant(cls, variant_id: int) -> None:
+		"""Delete a product variant."""
+		with cls.connection() as conn:
+			conn.execute('DELETE FROM product_variants WHERE id=?', (variant_id,))
+
+	@classmethod
+	def low_stock_variants(cls) -> List[Dict[str, Any]]:
+		"""Get all variants with low stock."""
+		cur = cls.connection().execute(
+			"""
+			SELECT pv.*, p.name AS product_name
+			FROM product_variants pv
+			JOIN products p ON p.id = pv.product_id
+			WHERE pv.stock_quantity <= pv.low_stock_threshold
+			ORDER BY p.name, pv.size, pv.color
+			"""
+		)
+		return [dict(r) for r in cur.fetchall()]
+
+	@classmethod
+	def get_product_with_variants(cls, product_id: int) -> Dict[str, Any]:
+		"""Get product with its variants."""
+		product_row = cls.connection().execute(
+			'SELECT p.*, c.name AS category_name, b.name AS brand_name FROM products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.id=?',
+			(product_id,)
+		).fetchone()
+		if not product_row:
+			return {}
+		product = dict(product_row)
+		product['variants'] = cls.list_variants(product_id)
+		return product
 
