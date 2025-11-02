@@ -9,8 +9,9 @@ Beauty P&C POS is a fully offline Point of Sale system for Windows, built with P
 ### Core Features
 - **User Management**: Login with Admin and Cashier roles
 - **Product Management**: Add, edit, delete products with categories, brands, barcodes, cost prices, and selling prices
-- **Stock Management**: Automatic stock tracking with low stock alerts
-- **POS Screen**: Fast checkout with search, barcode scanning, cart, discounts, and multiple payment methods
+- **Product Variants**: Manage product variants with size, color, SKU, variant-specific barcodes, pricing, and stock
+- **Stock Management**: Automatic stock tracking with low stock alerts (supports both products and variants)
+- **POS Screen**: Fast checkout with search, barcode scanning, variant selection, cart, discounts, and multiple payment methods
 
 ### Sales & Customers
 - **Sales Management**: View, edit, and delete sales transactions
@@ -51,6 +52,12 @@ Beauty P&C POS is a fully offline Point of Sale system for Windows, built with P
 - Customer Details Reports
 
 ### Additional Features
+- **Product Variants Management**: 
+  - Create variants with size, color, SKU, and unique barcodes
+  - Variant-specific pricing and cost pricing
+  - Individual stock tracking per variant
+  - Low stock alerts for variants
+  - Variant selection during sales and purchases
 - **Thermal Receipt Printing**: ESC/POS or Windows printer support
 - **PDF Invoice Generation**: Automatic PDF generation for sales
 - **Export Functionality**: Export data to CSV/Excel
@@ -117,7 +124,8 @@ beauty_pc_pos/
 │   ├── login.py              # Login dialog
 │   ├── dashboard.py          # Main dashboard window
 │   ├── pos_screen.py         # Point of Sale screen
-│   ├── products.py           # Product management
+│   ├── products.py           # Product management with variants
+│   ├── variant_selector.py   # Variant selection dialog
 │   ├── purchases.py          # Purchase entry screen
 │   ├── purchase_management.py # Purchase management dialog
 │   ├── sales.py              # Sales management dialog
@@ -144,23 +152,25 @@ beauty_pc_pos/
 
 ### Making a Sale
 1. Go to POS tab
-2. Search or scan product barcode
-3. Add products to cart (double-click or press Enter)
-4. Adjust quantities, prices, discounts as needed
-5. Select payment type (Cash, Card, QR, Other)
-6. Enter paid amount
-7. Click "Checkout & Print" (F9)
-8. Stock automatically decreases
+2. Search or scan product barcode (supports both product and variant barcodes)
+3. If product has variants, select the desired variant from the selection dialog
+4. Add products/variants to cart (double-click or press Enter)
+5. Adjust quantities, prices, discounts as needed
+6. Select payment type (Cash, Card, QR, Other)
+7. Enter paid amount
+8. Click "Checkout & Print" (F9)
+9. Stock automatically decreases (variant stock if variant selected, otherwise product stock)
 
 ### Recording a Purchase (Bulk Buy)
 1. Go to Purchases tab (Admin only)
-2. Search or select products
-3. Add products to purchase cart with quantities and unit costs
-4. Enter supplier name (optional)
-5. Select payment type (Cash, Card, Cheque, Credit, Other)
-6. Enter paid amount
-7. Click "Save Purchase" (F9)
-8. Stock automatically increases, cost price updates
+2. Search or select products (supports both product and variant barcodes)
+3. If product has variants, select the desired variant from the selection dialog
+4. Add products/variants to purchase cart with quantities and unit costs
+5. Enter supplier name (optional)
+6. Select payment type (Cash, Card, Cheque, Credit, Other)
+7. Enter paid amount
+8. Click "Save Purchase" (F9)
+9. Stock automatically increases (variant stock if variant selected, otherwise product stock), cost price updates
 
 ### Recording Bank Transactions
 1. Go to Manage menu → Bank Transactions (Admin only)
@@ -188,12 +198,25 @@ The system tracks different payment methods:
 Key tables:
 - `users`: User accounts with roles
 - `products`: Product catalog with stock
-- `sales` & `sale_items`: Sales transactions
-- `purchases` & `purchase_items`: Purchase transactions
+- `product_variants`: Product variants with size, color, SKU, barcodes, pricing, and stock
+- `sales` & `sale_items`: Sales transactions (supports variant_id)
+- `purchases` & `purchase_items`: Purchase transactions (supports variant_id)
 - `expenses`: Expense records with payment types
 - `customers`: Customer information
 - `bank_transactions`: Cash ↔ Bank transfers
 - `other_income`: Other income sources
+
+## Product Variants
+
+The system supports product variants to manage different sizes, colors, SKUs, and other variations of the same product:
+
+- **Creating Variants**: Edit an existing product and go to the "Variants" tab to add variants
+- **Variant Fields**: Size, Color, SKU, Barcode, Price (optional, falls back to product price), Cost Price, Stock Quantity, Low Stock Threshold
+- **Variant Barcodes**: Each variant can have its own unique barcode for direct scanning
+- **Stock Tracking**: Variants have independent stock levels separate from the base product
+- **Pricing**: Variants can have custom pricing, or use the base product price if not specified
+- **Sales & Purchases**: When adding a product with variants to cart, a selection dialog appears to choose the variant
+- **Low Stock Alerts**: Both products and variants are included in low stock reports
 
 ## Notes
 - The database auto-initializes on first launch using `schema.sql`. Sample data is not loaded by default.
@@ -201,6 +224,7 @@ Key tables:
 - All data stays offline. No internet connection is required.
 - Default admin login: `admin` / `admin123` (change after first login)
 - Cashiers can only use POS screen; admins have full access
+- Products without variants work exactly as before - the variant system is optional and backward compatible
 
 ## License
 Proprietary – for Beauty P&C internal use.
