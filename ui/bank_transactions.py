@@ -150,3 +150,4 @@ class BankTransactionsDialog(QtWidgets.QDialog):
 			self.refresh()
 
 
+

@@ -175,3 +175,4 @@ class PurchasesDialog(QtWidgets.QDialog):
 			QtWidgets.QMessageBox.critical(self, 'Delete Failed', str(e))
 
 
+

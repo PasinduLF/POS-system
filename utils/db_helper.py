@@ -838,3 +838,153 @@ class Database:
 		cur = cls.connection().execute('SELECT key, value FROM settings')
 		return {row['key']: row['value'] for row in cur.fetchall()}
 
+	# Dashboard Widgets Data
+	@classmethod
+	def _get_date_filter(cls, period: str) -> str:
+		"""Get SQL date filter based on period."""
+		if period == 'today':
+			return "DATE(created_at) = DATE('now', 'localtime')"
+		elif period == 'week':
+			return "DATE(created_at) >= DATE('now', 'localtime', '-7 days')"
+		elif period == 'month':
+			return "DATE(created_at) >= DATE('now', 'localtime', 'start of month')"
+		elif period == 'year':
+			return "DATE(created_at) >= DATE('now', 'localtime', 'start of year')"
+		else:  # all_time
+			return "1=1"  # All records
+
+	@classmethod
+	def sales_by_time_period(cls, period: str = 'today') -> List[Dict[str, Any]]:
+		"""Get sales data grouped by time unit based on period, for chart."""
+		date_filter = cls._get_date_filter(period)
+		
+		if period == 'today':
+			# Group by hour for today
+			query = f"""
+				SELECT 
+					STRFTIME('%H', created_at) AS time_unit,
+					IFNULL(SUM(total_amount), 0) AS total
+				FROM sales
+				WHERE {date_filter}
+				GROUP BY time_unit
+				ORDER BY time_unit
+			"""
+		elif period == 'week':
+			# Group by day for week
+			query = f"""
+				SELECT 
+					DATE(created_at) AS time_unit,
+					IFNULL(SUM(total_amount), 0) AS total
+				FROM sales
+				WHERE {date_filter}
+				GROUP BY time_unit
+				ORDER BY time_unit
+			"""
+		elif period == 'month':
+			# Group by day for month
+			query = f"""
+				SELECT 
+					DATE(created_at) AS time_unit,
+					IFNULL(SUM(total_amount), 0) AS total
+				FROM sales
+				WHERE {date_filter}
+				GROUP BY time_unit
+				ORDER BY time_unit
+			"""
+		elif period == 'year':
+			# Group by month for year
+			query = f"""
+				SELECT 
+					STRFTIME('%Y-%m', created_at) AS time_unit,
+					IFNULL(SUM(total_amount), 0) AS total
+				FROM sales
+				WHERE {date_filter}
+				GROUP BY time_unit
+				ORDER BY time_unit
+			"""
+		else:  # all_time
+			# Group by month for all time
+			query = f"""
+				SELECT 
+					STRFTIME('%Y-%m', created_at) AS time_unit,
+					IFNULL(SUM(total_amount), 0) AS total
+				FROM sales
+				WHERE {date_filter}
+				GROUP BY time_unit
+				ORDER BY time_unit
+			"""
+		
+		cur = cls.connection().execute(query)
+		return [dict(r) for r in cur.fetchall()]
+
+	@classmethod
+	def summary_stats(cls, period: str = 'today') -> Dict[str, Any]:
+		"""Get summary statistics for the selected period."""
+		date_filter = cls._get_date_filter(period)
+		# For sales table queries, 'created_at' is already correct (no join needed)
+		conn = cls.connection()
+		
+		# Revenue
+		revenue_row = conn.execute(
+			f"SELECT IFNULL(SUM(total_amount), 0) AS total FROM sales WHERE {date_filter}"
+		).fetchone()
+		revenue = float(revenue_row['total'] if revenue_row else 0.0)
+		
+		# Transactions count
+		transactions_row = conn.execute(
+			f"SELECT COUNT(*) AS count FROM sales WHERE {date_filter}"
+		).fetchone()
+		transactions = int(transactions_row['count'] if transactions_row else 0)
+		
+		# Customers count (unique)
+		customers_row = conn.execute(
+			f"""
+			SELECT COUNT(DISTINCT customer_id) AS count 
+			FROM sales 
+			WHERE {date_filter} AND customer_id IS NOT NULL
+			"""
+		).fetchone()
+		customers = int(customers_row['count'] if customers_row else 0)
+		
+		# Average transaction value
+		avg_transaction = revenue / transactions if transactions > 0 else 0.0
+		
+		# Discount total
+		discount_row = conn.execute(
+			f"SELECT IFNULL(SUM(discount_amount), 0) AS total FROM sales WHERE {date_filter}"
+		).fetchone()
+		discounts = float(discount_row['total'] if discount_row else 0.0)
+		
+		return {
+			'revenue': revenue,
+			'transactions': transactions,
+			'customers': customers,
+			'avg_transaction': avg_transaction,
+			'discounts': discounts
+		}
+
+	@classmethod
+	def top_products_by_period(cls, period: str = 'today', limit: int = 5) -> List[Dict[str, Any]]:
+		"""Get top selling products for the selected period."""
+		date_filter = cls._get_date_filter(period)
+		# Replace 'created_at' with 's.created_at' to specify the table
+		date_filter = date_filter.replace('created_at', 's.created_at')
+		
+		cur = cls.connection().execute(
+			f"""
+			SELECT 
+				p.name,
+				SUM(si.quantity) AS qty,
+				SUM(si.line_total) AS revenue
+			FROM sale_items si
+			JOIN sales s ON s.id = si.sale_id
+			JOIN products p ON p.id = si.product_id
+			WHERE {date_filter}
+			GROUP BY p.id
+			ORDER BY qty DESC
+			LIMIT ?
+			""",
+			(limit,)
+		)
+		return [dict(r) for r in cur.fetchall()]
+

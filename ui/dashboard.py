@@ -3,6 +3,7 @@ from .pos_screen import POSWidget
 from .products import ProductsWidget
 from .reports import ReportsWidget
 from .purchases import PurchaseWidget
+from .dashboard_widgets import DashboardWidgets
 from utils.backup import backup_database, export_table_to_csv, export_table_to_excel
 import os
 import zipfile
@@ -16,11 +17,13 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		self.setWindowTitle('Beauty P&C POS - Dashboard')
 
 		self.tabs = QtWidgets.QTabWidget()
+		self.dashboard_tab = DashboardWidgets(db)
 		self.pos_tab = POSWidget(db, self.user)
 		self.purchases_tab = PurchaseWidget(db, self.user)
 		self.products_tab = ProductsWidget(db)
 		self.reports_tab = ReportsWidget(db)
 
+		self.tabs.addTab(self.dashboard_tab, '📊 Dashboard')
 		self.tabs.addTab(self.pos_tab, 'POS')
 		self.tabs.addTab(self.purchases_tab, 'Purchases')
 		self.tabs.addTab(self.products_tab, 'Products')
@@ -48,6 +51,7 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		self.showMaximized()
 
 		if self.user['role'] == 'cashier':
+			# Cashiers can see Dashboard and POS only
 			idx = self.tabs.indexOf(self.purchases_tab)
 			self.tabs.removeTab(idx)
 			idx = self.tabs.indexOf(self.products_tab)
@@ -308,7 +312,9 @@ class DashboardWindow(QtWidgets.QMainWindow):
 		# Clear and recreate main tabs according to role
 		while self.tabs.count() > 0:
 			self.tabs.removeTab(0)
+		self.dashboard_tab = DashboardWidgets(self.db)
 		self.pos_tab = POSWidget(self.db, self.user)
+		self.tabs.addTab(self.dashboard_tab, '📊 Dashboard')
 		self.tabs.addTab(self.pos_tab, 'POS')
 		if self.user['role'] == 'admin':
 			self.purchases_tab = PurchaseWidget(self.db, self.user)
@@ -321,6 +327,11 @@ class DashboardWindow(QtWidgets.QMainWindow):
 	def _refresh_all(self):
 		# Refresh header stats
 		self.refresh_header()
+		# Refresh Dashboard widgets
+		try:
+			self.dashboard_tab.refresh_all()
+		except Exception:
+			pass
 		# Refresh POS product list/cart totals
 		try:
 			self.pos_tab.refresh_all()

@@ -65,3 +65,4 @@ class OtherIncomeDialog(QtWidgets.QDialog):
 
 
 
+
